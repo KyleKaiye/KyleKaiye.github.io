@@ -191,63 +191,68 @@
 
     // Sending message to the bot
     async function sendMessage() {
-      const message = document.getElementById('user-input').value;
-      if (!message.trim()) return;
+  const message = document.getElementById('user-input').value;
+  if (!message.trim()) return;
 
-      displayMessage(message, "user");
-      document.getElementById('user-input').value = ""; // Clear input
+  displayMessage(message, "user");
+  document.getElementById('user-input').value = ""; // Clear input
 
-      try {
-        const response = await fetch('https://api.coze.cn/v3/chat', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            bot_id: botId,
-            user_id: userId,
-            additional_messages: [
-              { role: "user", content: message, content_type: "text" }
-            ],
-            stream: true,
-            auto_save_history: true
-          })
-        });
+  try {
+    const response = await fetch('https://api.coze.cn/v3/chat', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        bot_id: botId,
+        user_id: userId,
+        additional_messages: [
+          { role: "user", content: message, content_type: "text" }
+        ],
+        stream: true,
+        auto_save_history: true
+      })
+    });
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let done = false;
-        let output = '';
-
-        while (!done) {
-          const { value, done: readerDone } = await reader.read();
-          done = readerDone;
-          output += decoder.decode(value, { stream: true });
-
-          const events = output.split('\n');
-          for (let event of events) {
-            if (event.trim()) {
-              try {
-                const parsedEvent = JSON.parse(event);
-                handleEvent(parsedEvent); 
-              } catch (e) {
-                console.error("Error parsing event data:", e, event);
-              }
-            }
-          }
-
-          output = output.substring(output.lastIndexOf('\n') + 1);
-        }
-      } catch (error) {
-        console.error("Error during streaming:", error);
-        displayMessage(`Error: ${error.message}`, "bot");
-      }
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
     }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let done = false;
+    let output = '';
+
+    while (!done) {
+      const { value, done: readerDone } = await reader.read();
+      done = readerDone;
+      output += decoder.decode(value, { stream: true });
+
+      const events = output.split('\n');
+      for (let event of events) {
+        if (event.trim()) {
+          try {
+            // Check for "data:" prefix and parse correctly
+            if (event.startsWith('data:')) {
+              const eventData = event.slice(5).trim();  // Extract data: content
+              const parsedEvent = JSON.parse(eventData);  // Parse the JSON content of the data
+              handleEvent(parsedEvent);  // Handle the parsed event
+            }
+          } catch (e) {
+            console.error("Error parsing event data:", e, event);
+          }
+        }
+      }
+
+      // Make sure the remaining part of the message is stored
+      output = output.substring(output.lastIndexOf('\n') + 1);
+    }
+  } catch (error) {
+    console.error("Error during streaming:", error);
+    displayMessage(`Error: ${error.message}`, "bot");
+  }
+}
 
     // Handle different event types (including stream)
     function handleEvent(event) {
