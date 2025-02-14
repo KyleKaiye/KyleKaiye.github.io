@@ -197,6 +197,7 @@ async function sendMessage() {
   document.getElementById('user-input').value = ""; // 立即清空输入框
 
   try {
+    // 首次发送消息
     const response = await fetch('https://api.coze.cn/v3/chat', {
       method: 'POST',
       headers: {
@@ -207,8 +208,9 @@ async function sendMessage() {
         bot_id: botId,
         user_id: userId,
         stream: false,
+        auto_save_history: true,
         conversation_id: conversationId,
-        messages: [
+        additional_messages: [
           {
             "role": "user",
             "content": message,
@@ -223,7 +225,7 @@ async function sendMessage() {
     }
 
     const data = await response.json();
-    console.log('API Response:', data);
+    console.log('Initial API Response:', data);
 
     if (data.code !== 0) {
       throw new Error(`API Error: ${data.msg}`);
@@ -234,13 +236,11 @@ async function sendMessage() {
       conversationId = data.data.conversation_id;
     }
 
-    // 获取bot的回复 - 从websocket或其他response字段
-    // 这里需要根据实际API响应结构调整
-    if (data.data?.response) {
-      const botResponse = data.data.response;
+    // 检查是否有直接回复
+    if (data.data?.reply_content) {
+      const botResponse = data.data.reply_content;
       displayMessage(botResponse, "bot");
       
-      // 保存对话历史
       if (!conversations[conversationId]) {
         conversations[conversationId] = { messages: [] };
       }
@@ -249,8 +249,7 @@ async function sendMessage() {
         { role: 'bot', content: botResponse }
       );
     } else {
-      console.log('Full API response:', data);
-      displayMessage("Waiting for bot response...", "bot");
+      displayMessage("No direct response from the bot. Please try again.", "bot");
     }
 
   } catch (error) {
@@ -259,22 +258,26 @@ async function sendMessage() {
   }
 }
 
-    function startNewConversation() {
-      conversationId = null;
-      
-      const tempId = Date.now();
-      conversations[tempId] = { messages: [] };
+// 修改startNewConversation函数，确保正确初始化
+function startNewConversation() {
+  conversationId = null;
+  const tempId = Date.now().toString();
+  
+  conversations[tempId] = { 
+    messages: [],
+    created_at: new Date().toISOString()
+  };
 
-      document.getElementById('chat-box').innerHTML = "";
-      displayMessage("Starting a new conversation...", "bot");
+  document.getElementById('chat-box').innerHTML = "";
+  displayMessage("Starting a new conversation...", "bot");
 
-      const conversationList = document.getElementById('conversation-list');
-      const newConversationItem = document.createElement('li');
-      newConversationItem.classList.add('conversation-item');
-      newConversationItem.textContent = `Conversation ${tempId}`;
-      newConversationItem.onclick = () => loadConversation(tempId);
-      conversationList.appendChild(newConversationItem);
-    }
+  const conversationList = document.getElementById('conversation-list');
+  const newConversationItem = document.createElement('li');
+  newConversationItem.classList.add('conversation-item');
+  newConversationItem.textContent = `Conversation ${new Date().toLocaleTimeString()}`;
+  newConversationItem.onclick = () => loadConversation(tempId);
+  conversationList.appendChild(newConversationItem);
+}
 
     function loadConversation(id) {
       conversationId = id;
