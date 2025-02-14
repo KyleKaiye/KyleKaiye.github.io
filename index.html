@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Streamed Conversation</title>
   <style>
     body {
@@ -13,7 +13,6 @@
       height: 100vh;
       background-color: #f0f4f8;
     }
-
     #sidebar {
       width: 250px;
       background-color: #fff;
@@ -22,13 +21,11 @@
       overflow-y: auto;
       height: 100vh;
     }
-
     #sidebar h2 {
       margin: 0;
       font-size: 18px;
       color: #333;
     }
-
     #chat-container {
       flex-grow: 1;
       display: flex;
@@ -39,7 +36,6 @@
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
       max-width: calc(100% - 250px);
     }
-
     #chat-box {
       padding: 20px;
       overflow-y: auto;
@@ -48,7 +44,6 @@
       flex-direction: column;
       gap: 10px;
     }
-
     #user-input {
       padding: 15px;
       width: 100%;
@@ -58,19 +53,16 @@
       box-sizing: border-box;
       border-radius: 5px;
     }
-
     .message {
       padding: 10px;
       border-radius: 8px;
       max-width: 80%;
       word-wrap: break-word;
     }
-
     .user {
       background-color: #e0f7fa;
       align-self: flex-end;
     }
-
     .bot {
       background-color: #fff9c4;
       align-self: flex-start;
@@ -86,7 +78,7 @@
 
   <div id="chat-container">
     <div id="chat-box"></div>
-    <input type="text" id="user-input" placeholder="Type your message..." onkeyup="if(event.key === 'Enter') sendMessage()">
+    <input type="text" id="user-input" placeholder="Type your message..." onkeyup="if(event.key==='Enter') sendMessage()" />
     <div id="controls">
       <button class="btn" onclick="deleteConversation()">Delete Conversation</button>
     </div>
@@ -106,89 +98,121 @@
       document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
     }
 
+    // Our SSE parser inside sendMessage
     async function sendMessage() {
-  const message = document.getElementById('user-input').value;
-  if (!message.trim()) return;
+      const message = document.getElementById('user-input').value;
+      if (!message.trim()) return;
 
-  displayMessage(message, "user");
-  document.getElementById('user-input').value = ""; // Clear input field
+      displayMessage(message, "user");
+      document.getElementById('user-input').value = ""; // Clear input
 
-  try {
-    const response = await fetch('https://api.coze.cn/v3/chat', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        bot_id: botId,
-        user_id: userId,
-        additional_messages: [
-          {
-            role: "user",
-            content: message,
-            content_type: "text"
-          }
-        ],
-        stream: true,  // Enable stream
-        auto_save_history: true
-      })
-    });
+      try {
+        const response = await fetch('https://api.coze.cn/v3/chat', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            bot_id: botId,
+            user_id: userId,
+            additional_messages: [{
+              role: "user",
+              content: message,
+              content_type: "text"
+            }],
+            stream: true, // Enable stream mode
+            auto_save_history: true
+          })
+        });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let done = false;
-    let output = '';
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let done = false;
+        let buffer = "";
+        // Temporary object to accumulate an event block
+        let eventObj = { event: "", data: "" };
 
-    // Read and process the streamed data
-    while (!done) {
-      const { value, done: readerDone } = await reader.read();
-      done = readerDone;
-      output += decoder.decode(value, { stream: true });
-
-      // Process each line of streamed output
-      const events = output.split('\n');
-      for (let event of events) {
-        if (event.trim()) {
-          try {
-            const parsedEvent = JSON.parse(event);
-            handleEvent(parsedEvent);  // Handle the event (Message, Error, Done)
-          } catch (e) {
-            console.error("Error parsing JSON event:", e);
-            // Log the malformed event for debugging
-            console.log("Malformed event:", event);
+        // Helper: process a single line from the SSE stream
+        function processLine(line) {
+          if (line.startsWith("event:")) {
+            eventObj.event = line.slice("event:".length).trim();
+          } else if (line.startsWith("data:")) {
+            // Accumulate data lines (they might be split over multiple lines)
+            eventObj.data += line.slice("data:".length).trim();
+          } else if (line.trim() === "") {
+            // Blank line indicates the end of an event block
+            if (eventObj.event || eventObj.data) {
+              try {
+                // Try parsing the data as JSON
+                const parsedData = JSON.parse(eventObj.data);
+                handleEvent({ event: eventObj.event, data: parsedData });
+              } catch (e) {
+                console.error("Error parsing event data:", e, eventObj.data);
+              }
+            }
+            // Reset for the next event block
+            eventObj = { event: "", data: "" };
           }
         }
-      }
 
-      // Make sure the remaining part of the message is stored
-      output = output.substring(output.lastIndexOf('\n') + 1);
+        // Read the stream
+        while (!done) {
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+          buffer += decoder.decode(value, { stream: true });
+          // Split by newline
+          let lines = buffer.split("\n");
+          // If the last line is incomplete, keep it in the buffer.
+          buffer = lines.pop();
+          for (const line of lines) {
+            processLine(line);
+          }
+        }
+        // Process any remaining data in buffer if terminated by a newline.
+        if (buffer) {
+          processLine(buffer);
+        }
+      } catch (error) {
+        console.error("Error during streaming:", error);
+        displayMessage(`Error: ${error.message}`, "bot");
+      }
     }
 
-  } catch (error) {
-    console.error("Error during streaming:", error);
-    displayMessage(`Error: ${error.message}`, "bot");
-  }
-}
-
+    // Handle parsed SSE events
     function handleEvent(event) {
-      if (event.event === 'conversation.chat.created') {
-        console.log('Conversation started');
-      } else if (event.event === 'conversation.chat.in_progress') {
-        displayMessage("Bot is processing, please wait...", "bot");
-      } else if (event.event === 'conversation.message.delta') {
-        displayMessage(event.data.content, "bot");
-      } else if (event.event === 'conversation.chat.completed') {
-        console.log('Conversation completed');
-        displayMessage("Conversation completed.", "bot");
-      } else if (event.event === 'done') {
-        console.log('Stream ended');
-      } else if (event.event === 'error') {
-        displayMessage(`Error: ${event.data.error_message}`, "bot");
+      switch (event.event) {
+        case 'conversation.chat.created':
+          console.log('Conversation started:', event.data);
+          // Optionally update conversationId here
+          break;
+        case 'conversation.chat.in_progress':
+          displayMessage("Bot is processing, please wait...", "bot");
+          break;
+        case 'conversation.message.delta':
+          // Show incremental messages (you might accumulate these if needed)
+          displayMessage(event.data.content, "bot");
+          break;
+        case 'conversation.message.completed':
+          // Completed message (final result for this message)
+          displayMessage(event.data.content, "bot");
+          break;
+        case 'conversation.chat.completed':
+          console.log('Conversation completed:', event.data);
+          displayMessage("Conversation completed.", "bot");
+          break;
+        case 'done':
+          console.log('Stream ended');
+          break;
+        case 'error':
+          displayMessage(`Error: ${event.data.error_message}`, "bot");
+          break;
+        default:
+          console.log("Unhandled event:", event);
       }
     }
 
