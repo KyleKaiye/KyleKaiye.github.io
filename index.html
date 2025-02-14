@@ -5,157 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DeepSeek R1</title>
   <style>
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      height: 100vh;
-      background-color: #f0f4f8;
-    }
-
-    #sidebar {
-      width: 250px;
-      background-color: #fff;
-      box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
-      padding: 20px;
-      overflow-y: auto;
-      height: 100vh;
-    }
-
-    #sidebar h2 {
-      margin: 0;
-      font-size: 18px;
-      color: #333;
-    }
-
-    #sidebar .conversation-list {
-      list-style-type: none;
-      padding: 0;
-    }
-
-    #sidebar .conversation-item {
-      margin: 10px 0;
-      padding: 8px;
-      background-color: #e0f7fa;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-
-    #sidebar .conversation-item:hover {
-      background-color: #b2ebf2;
-    }
-
-    #chat-container {
-      flex-grow: 1;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      background-color: #ffffff;
-      border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-      max-width: calc(100% - 250px);
-    }
-
-    #chat-box {
-      padding: 20px;
-      overflow-y: auto;
-      flex-grow: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    #user-input {
-      padding: 15px;
-      width: 100%;
-      border: none;
-      border-top: 1px solid #ddd;
-      font-size: 16px;
-      box-sizing: border-box;
-      border-radius: 5px;
-    }
-
-    .message {
-      padding: 10px;
-      border-radius: 8px;
-      max-width: 80%;
-      word-wrap: break-word;
-    }
-
-    .user {
-      background-color: #e0f7fa;
-      align-self: flex-end;
-    }
-
-    .bot {
-      background-color: #fff9c4;
-      align-self: flex-start;
-    }
-
-    #controls {
-      display: flex;
-      justify-content: space-between;
-      padding: 10px;
-    }
-
-    .btn {
-      padding: 10px 15px;
-      background-color: #4caf50;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: background-color 0.3s;
-    }
-
-    .btn:hover {
-      background-color: #45a049;
-    }
-
-    @media (max-width: 900px) {
-      body {
-        flex-direction: column;
-      }
-
-      #sidebar {
-        width: 100%;
-        height: auto;
-        box-shadow: none;
-        padding: 10px;
-        border-bottom: 1px solid #ddd;
-      }
-
-      #chat-container {
-        width: 100%;
-        height: calc(100vh - 60px);
-        margin-top: 10px;
-      }
-
-      .btn {
-        padding: 8px 12px;
-        font-size: 12px;
-      }
-
-      #user-input {
-        font-size: 14px;
-      }
-
-      .message {
-        max-width: 95%;
-      }
-    }
-
-    @media (max-width: 600px) {
-      #sidebar {
-        padding: 8px;
-      }
-
-      #chat-container {
-        padding: 10px;
-      }
-    }
+    /* Your CSS code */
   </style>
 </head>
 <body>
@@ -189,95 +39,93 @@
       document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
     }
 
-async function sendMessage() {
-  const message = document.getElementById('user-input').value;
-  if (!message.trim()) return;
+    async function sendMessage() {
+      const message = document.getElementById('user-input').value;
+      if (!message.trim()) return;
 
-  displayMessage(message, "user");
-  document.getElementById('user-input').value = ""; // 立即清空输入框
+      displayMessage(message, "user");
+      document.getElementById('user-input').value = ""; // Clear input field
 
-  try {
-    // 首次发送消息
-    const response = await fetch('https://api.coze.cn/v3/chat', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        bot_id: botId,
-        user_id: userId,
-        stream: false,
-        auto_save_history: true,
-        conversation_id: conversationId,
-        additional_messages: [
-          {
-            "role": "user",
-            "content": message,
-            "content_type": "text"
+      try {
+        const response = await fetch('https://api.coze.cn/v3/chat', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            bot_id: botId,
+            user_id: userId,
+            stream: false,
+            auto_save_history: true,
+            conversation_id: conversationId,
+            additional_messages: [
+              {
+                "role": "user",
+                "content": message,
+                "content_type": "text"
+              }
+            ]
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('Initial API Response:', data);
+
+        if (data.code !== 0) {
+          throw new Error(`API Error: ${data.msg}`);
+        }
+
+        // Update conversation_id
+        if (data.data?.conversation_id) {
+          conversationId = data.data.conversation_id;
+        }
+
+        // Check if there's a reply from the bot
+        if (data.data?.reply_content) {
+          const botResponse = data.data.reply_content;
+          displayMessage(botResponse, "bot");
+          
+          if (!conversations[conversationId]) {
+            conversations[conversationId] = { messages: [] };
           }
-        ]
-      })
-    });
+          conversations[conversationId].messages.push(
+            { role: 'user', content: message },
+            { role: 'bot', content: botResponse }
+          );
+        } else {
+          displayMessage("No direct response from the bot. Please try again.", "bot");
+        }
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('Initial API Response:', data);
-
-    if (data.code !== 0) {
-      throw new Error(`API Error: ${data.msg}`);
-    }
-
-    // 更新conversation_id
-    if (data.data?.conversation_id) {
-      conversationId = data.data.conversation_id;
-    }
-
-    // 检查是否有直接回复
-    if (data.data?.reply_content) {
-      const botResponse = data.data.reply_content;
-      displayMessage(botResponse, "bot");
-      
-      if (!conversations[conversationId]) {
-        conversations[conversationId] = { messages: [] };
+      } catch (error) {
+        console.error("Error during API request:", error);
+        displayMessage(`Error: ${error.message}`, "bot");
       }
-      conversations[conversationId].messages.push(
-        { role: 'user', content: message },
-        { role: 'bot', content: botResponse }
-      );
-    } else {
-      displayMessage("No direct response from the bot. Please try again.", "bot");
     }
 
-  } catch (error) {
-    console.error("Error during API request:", error);
-    displayMessage(`Error: ${error.message}`, "bot");
-  }
-}
+    function startNewConversation() {
+      conversationId = null;
+      const tempId = Date.now().toString();
+      
+      conversations[tempId] = { 
+        messages: [],
+        created_at: new Date().toISOString()
+      };
 
-// 修改startNewConversation函数，确保正确初始化
-function startNewConversation() {
-  conversationId = null;
-  const tempId = Date.now().toString();
-  
-  conversations[tempId] = { 
-    messages: [],
-    created_at: new Date().toISOString()
-  };
+      document.getElementById('chat-box').innerHTML = "";
+      displayMessage("Starting a new conversation...", "bot");
 
-  document.getElementById('chat-box').innerHTML = "";
-  displayMessage("Starting a new conversation...", "bot");
-
-  const conversationList = document.getElementById('conversation-list');
-  const newConversationItem = document.createElement('li');
-  newConversationItem.classList.add('conversation-item');
-  newConversationItem.textContent = `Conversation ${new Date().toLocaleTimeString()}`;
-  newConversationItem.onclick = () => loadConversation(tempId);
-  conversationList.appendChild(newConversationItem);
-}
+      const conversationList = document.getElementById('conversation-list');
+      const newConversationItem = document.createElement('li');
+      newConversationItem.classList.add('conversation-item');
+      newConversationItem.textContent = `Conversation ${new Date().toLocaleTimeString()}`;
+      newConversationItem.onclick = () => loadConversation(tempId);
+      conversationList.appendChild(newConversationItem);
+    }
 
     function loadConversation(id) {
       conversationId = id;
@@ -297,7 +145,7 @@ function startNewConversation() {
       displayMessage("Conversation deleted.", "bot");
     }
 
-    // 初始化页面时启动新对话
+    // Initialize the page with a new conversation
     startNewConversation();
   </script>
 </body>
