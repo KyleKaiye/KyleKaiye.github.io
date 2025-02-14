@@ -14,12 +14,14 @@
       background-color: #f0f4f8;
     }
 
+    /* Sidebar styles */
     #sidebar {
       width: 250px;
       background-color: #fff;
       box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
       padding: 20px;
       overflow-y: auto;
+      height: 100%;
     }
 
     #sidebar h2 {
@@ -45,6 +47,7 @@
       background-color: #b2ebf2;
     }
 
+    /* Main chat container */
     #chat-container {
       flex-grow: 1;
       display: flex;
@@ -53,6 +56,7 @@
       background-color: #ffffff;
       border-radius: 10px;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      max-width: 100%; /* Ensure it takes full available space */
     }
 
     #chat-box {
@@ -113,22 +117,22 @@
     }
 
     /* Responsive design for mobile */
-    @media (max-width: 600px) {
+    @media (max-width: 900px) {
       body {
         flex-direction: column;
       }
 
       #sidebar {
         width: 100%;
+        height: auto;
         box-shadow: none;
         padding: 10px;
+        border-bottom: 1px solid #ddd;
       }
 
       #chat-container {
         width: 100%;
-        height: 100vh;
-        border-radius: 0;
-        box-shadow: none;
+        height: calc(100vh - 60px); /* Account for the height of the sidebar */
       }
 
       .btn {
@@ -138,6 +142,21 @@
 
       #user-input {
         font-size: 14px;
+      }
+
+      /* Adjust messages on smaller screens */
+      .message {
+        max-width: 95%;
+      }
+    }
+
+    @media (max-width: 600px) {
+      #sidebar {
+        padding: 8px;
+      }
+
+      #chat-container {
+        padding: 10px;
       }
     }
   </style>
@@ -257,16 +276,13 @@
     }
 
     function deleteConversation() {
-      if (!conversationId) {
-        displayMessage("No conversation to delete.", "bot");
-        return;
-      }
+      if (!conversationId) return;
       delete conversations[conversationId];
       conversationId = null;
       document.getElementById('chat-box').innerHTML = "";
-      displayMessage("Conversation deleted.", "bot");
     }
-  </script>
 
+    window.onload = () => startNewConversation(); 
+  </script>
 </body>
 </html>
