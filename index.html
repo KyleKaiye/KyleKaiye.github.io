@@ -189,97 +189,107 @@
       document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
     }
 
-    async function sendMessage() {
-      const message = document.getElementById('user-input').value;
-      if (!message.trim()) return;
+async function sendMessage() {
+  const message = document.getElementById('user-input').value;
+  if (!message.trim()) return;
 
-      displayMessage(message, "user");
+  displayMessage(message, "user");
 
-      try {
-        const response = await fetch('https://api.coze.cn/v3/chat', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            bot_id: botId,
-            user_id: userId,
-            stream: false,
-            auto_save_history: true,
-            conversation_id: conversationId,
-            additional_messages: [{ "role": "user", "content": message, "content_type": "text" }]
-          })
-        });
+  try {
+    const response = await fetch('https://api.coze.cn/v3/chat', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        bot_id: botId,
+        user_id: userId,
+        stream: false,
+        auto_save_history: true,
+        conversation_id: conversationId,
+        additional_messages: [{ "role": "user", "content": message, "content_type": "text" }]
+      })
+    });
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log('Initial API Response:', data);
-
-        if (data.data?.conversation_id) {
-          conversationId = data.data.conversation_id;
-        }
-
-        if (data.data?.messages && data.data.messages.length > 0) {
-          const botResponse = data.data.messages[data.data.messages.length - 1].content;
-          displayMessage(botResponse, "bot");
-          
-          if (!conversations[conversationId]) {
-            conversations[conversationId] = { messages: [] };
-          }
-          conversations[conversationId].messages.push(
-            { role: 'user', content: message },
-            { role: 'bot', content: botResponse }
-          );
-        } else {
-          let retryCount = 0;
-          const maxRetries = 5;
-          
-          while (retryCount < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            
-            const statusResponse = await fetch(`https://api.coze.cn/v3/chat/${conversationId}`, {
-              method: 'GET',
-              headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            
-            if (!statusResponse.ok) {
-              throw new Error(`Status check failed: ${statusResponse.status}`);
-            }
-            
-            const statusData = await statusResponse.json();
-            console.log('Status Check Response:', statusData);
-
-            if (statusData.data?.messages && statusData.data.messages.length > 0) {
-              const botResponse = statusData.data.messages[statusData.data.messages.length - 1].content;
-              displayMessage(botResponse, "bot");
-              
-              if (!conversations[conversationId]) {
-                conversations[conversationId] = { messages: [] };
-              }
-              conversations[conversationId].messages.push(
-                { role: 'user', content: message },
-                { role: 'bot', content: botResponse }
-              );
-              break;
-            }
-            
-            retryCount++;
-            if (retryCount === maxRetries) {
-              displayMessage("No response received after multiple attempts.", "bot");
-            }
-          }
-        }
-
-        document.getElementById('user-input').value = "";
-      } catch (error) {
-        console.error("Error during API request:", error);
-        displayMessage(`Error: ${error.message}`, "bot");
-      }
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
     }
+
+    const data = await response.json();
+    console.log('Initial API Response:', data);
+
+    // 检查API响应是否成功
+    if (data.code !== 0) {
+      throw new Error(`API Error: ${data.msg}`);
+    }
+
+    // 更新conversation_id
+    if (data.data?.conversation_id) {
+      conversationId = data.data.conversation_id;
+    }
+
+    // 使用消息ID获取响应
+    if (data.data?.id) {
+      const messageId = data.data.id;
+      let attempts = 0;
+      const maxAttempts = 10;
+      
+      while (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        try {
+          const msgResponse = await fetch('https://api.coze.cn/v3/chat/message', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              message_id: messageId,
+              conversation_id: conversationId
+            })
+          });
+
+          if (!msgResponse.ok) {
+            throw new Error(`Message check failed: ${msgResponse.status}`);
+          }
+
+          const msgData = await msgResponse.json();
+          console.log('Message Check Response:', msgData);
+
+          if (msgData.data?.content) {
+            const botResponse = msgData.data.content;
+            displayMessage(botResponse, "bot");
+            
+            if (!conversations[conversationId]) {
+              conversations[conversationId] = { messages: [] };
+            }
+            conversations[conversationId].messages.push(
+              { role: 'user', content: message },
+              { role: 'bot', content: botResponse }
+            );
+            break;
+          }
+        } catch (error) {
+          console.error("Error checking message:", error);
+        }
+
+        attempts++;
+        if (attempts === maxAttempts) {
+          displayMessage("No response received after multiple attempts. Please try again.", "bot");
+        }
+      }
+    } else {
+      displayMessage("Failed to get message ID. Please try again.", "bot");
+    }
+
+    document.getElementById('user-input').value = "";
+  } catch (error) {
+    console.error("Error during API request:", error);
+    displayMessage(`Error: ${error.message}`, "bot");
+  }
+}
 
     function startNewConversation() {
       conversationId = null;
