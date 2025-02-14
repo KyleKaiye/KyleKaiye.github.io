@@ -197,62 +197,93 @@
     }
 
     async function sendMessage() {
-      const message = document.getElementById('user-input').value;
-      if (!message.trim()) return;
+  const message = document.getElementById('user-input').value;
+  if (!message.trim()) return;
 
-      displayMessage(message, "user");
+  displayMessage(message, "user");
 
-      try {
-        const response = await fetch('https://api.coze.cn/v3/chat', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            bot_id: botId,
-            user_id: userId,
-            stream: false,
-            auto_save_history: true,
-            conversation_id: conversationId,
-            additional_messages: [{ "role": "user", "content": message, "content_type": "text" }]
-          })
-        });
+  try {
+    const response = await fetch('https://api.coze.cn/v3/chat', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        bot_id: botId,
+        user_id: userId,
+        stream: false,
+        auto_save_history: true,
+        conversation_id: conversationId,
+        additional_messages: [{ "role": "user", "content": message, "content_type": "text" }]
+      })
+    });
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        if (data.status === 'in_progress') {
-          let statusChecked = false;
-          while (!statusChecked) {
-            await new Promise(resolve => setTimeout(resolve, 3000)); 
-            const statusResponse = await fetch('https://api.coze.cn/v3/chat/' + data.data.conversation_id, {
-              method: 'GET',
-              headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            const statusData = await statusResponse.json();
-
-            if (statusData.status === 'completed') {
-              const botResponse = statusData.data.result || "Error occurred.";
-              displayMessage(botResponse, "bot");
-              conversations[conversationId] = { messages: [...conversations[conversationId].messages, { role: 'bot', content: botResponse }] };
-              statusChecked = true;
-            }
-          }
-        } else {
-          const botResponse = data.result || "Error occurred.";
-          displayMessage(botResponse, "bot");
-        }
-
-        document.getElementById('user-input').value = ""; 
-      } catch (error) {
-        console.error("Error during API request:", error);
-        displayMessage("An error occurred while processing your message. Please try again later.", "bot");
-      }
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
     }
 
+    const data = await response.json();
+    
+    // 检查API响应结构
+    console.log('API Response:', data);  // 添加日志
+    
+    if (data.status === 'in_progress') {
+      let statusChecked = false;
+      while (!statusChecked) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        const statusResponse = await fetch(`https://api.coze.cn/v3/chat/${data.data.conversation_id}`, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        
+        if (!statusResponse.ok) {
+          throw new Error(`Status check failed: ${statusResponse.status}`);
+        }
+        
+        const statusData = await statusResponse.json();
+        console.log('Status Check Response:', statusData);  // 添加日志
+
+        if (statusData.status === 'completed') {
+          // 修改这里以匹配正确的响应结构
+          const botResponse = statusData.data?.messages?.[0]?.content || "No response content";
+          displayMessage(botResponse, "bot");
+          
+          // 更新对话历史
+          if (!conversations[conversationId]) {
+            conversations[conversationId] = { messages: [] };
+          }
+          conversations[conversationId].messages.push(
+            { role: 'user', content: message },
+            { role: 'bot', content: botResponse }
+          );
+          
+          statusChecked = true;
+        }
+      }
+    } else if (data.status === 'completed') {
+      // 直接完成的情况
+      const botResponse = data.data?.messages?.[0]?.content || "No response content";
+      displayMessage(botResponse, "bot");
+      
+      // 更新对话历史
+      if (!conversations[conversationId]) {
+        conversations[conversationId] = { messages: [] };
+      }
+      conversations[conversationId].messages.push(
+        { role: 'user', content: message },
+        { role: 'bot', content: botResponse }
+      );
+    } else {
+      throw new Error(`Unexpected status: ${data.status}`);
+    }
+
+    document.getElementById('user-input').value = "";
+  } catch (error) {
+    console.error("Error during API request:", error);
+    displayMessage(`Error: ${error.message}`, "bot");
+  }
+}
     function startNewConversation() {
       // Use a unique conversation ID to ensure each conversation is distinct
       conversationId = Date.now();
