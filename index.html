@@ -47,6 +47,7 @@
   document.getElementById('user-input').value = ""; // Clear input field
 
   try {
+    // Send message to bot
     const response = await fetch('https://api.coze.cn/v3/chat', {
       method: 'POST',
       headers: {
@@ -85,13 +86,13 @@
       conversationId = data.data.conversation_id;
     }
 
-    // Retry mechanism if the bot response is still in progress
+    // Check if the bot response is in progress
     if (data.data?.status === "in_progress") {
       displayMessage("Bot is still processing your request, please wait...", "bot");
 
-      setTimeout(async () => {
-        await sendMessage();  // Retry after a short delay
-      }, 2000);  // 2 seconds delay before retrying
+      // Poll for the status of the response after a delay
+      await pollForBotReply(data.data.conversation_id, message);
+
     } else if (data.data?.reply_content) {
       const botResponse = data.data.reply_content;
       displayMessage(botResponse, "bot");
@@ -112,6 +113,64 @@
     displayMessage(`Error: ${error.message}`, "bot");
   }
 }
+
+async function pollForBotReply(conversationId, message) {
+  let retries = 0;
+  const maxRetries = 5;
+  const delay = 3000; // Poll every 3 seconds
+
+  while (retries < maxRetries) {
+    const response = await fetch('https://api.coze.cn/v3/chat', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        bot_id: botId,
+        user_id: userId,
+        stream: false,
+        auto_save_history: true,
+        conversation_id: conversationId,
+        additional_messages: []
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('Polling API Response:', data);
+
+    if (data.code !== 0) {
+      throw new Error(`API Error: ${data.msg}`);
+    }
+
+    // Check if the bot has finished processing the request
+    if (data.data?.status !== "in_progress" && data.data?.reply_content) {
+      const botResponse = data.data.reply_content;
+      displayMessage(botResponse, "bot");
+
+      if (!conversations[conversationId]) {
+        conversations[conversationId] = { messages: [] };
+      }
+      conversations[conversationId].messages.push(
+        { role: 'user', content: message },
+        { role: 'bot', content: botResponse }
+      );
+      return;
+    } else {
+      // Retry polling
+      retries++;
+      await new Promise(resolve => setTimeout(resolve, delay)); // Delay before next retry
+    }
+  }
+
+  // If the bot doesn't respond after max retries
+  displayMessage("Bot is still processing. Please try again later.", "bot");
+}
+
 
 
     function startNewConversation() {
