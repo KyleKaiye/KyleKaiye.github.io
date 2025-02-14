@@ -3,47 +3,115 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Streamed Conversation</title>
+  <title>Enhanced Chat Interface</title>
   <style>
+    /* Overall layout */
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       margin: 0;
       padding: 0;
       display: flex;
       height: 100vh;
-      background-color: #f0f4f8;
+      background-color: #f5f5f5;
+      color: #333;
     }
+    
+    /* Sidebar styles */
     #sidebar {
       width: 250px;
       background-color: #fff;
       box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
       padding: 20px;
-      overflow-y: auto;
       height: 100vh;
+      overflow-y: auto;
+      position: relative;
     }
+
     #sidebar h2 {
       margin: 0;
-      font-size: 18px;
+      font-size: 20px;
       color: #333;
     }
+
+    #conversation-list {
+      list-style: none;
+      padding: 0;
+      margin-top: 20px;
+      font-size: 16px;
+    }
+
+    .conversation-item {
+      padding: 10px;
+      margin: 5px 0;
+      background-color: #e0f7fa;
+      border-radius: 10px;
+      cursor: pointer;
+      position: relative;
+      transition: background-color 0.3s;
+    }
+
+    .conversation-item:hover {
+      background-color: #b2ebf2;
+    }
+
+    .delete-btn {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      background-color: red;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      display: none;
+    }
+
+    .conversation-item:hover .delete-btn {
+      display: block;
+    }
+
+    /* Chat area styles */
     #chat-container {
       flex-grow: 1;
       display: flex;
       flex-direction: column;
-      height: 100vh;
       background-color: #ffffff;
       border-radius: 10px;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
       max-width: calc(100% - 250px);
-    }
-    #chat-box {
       padding: 20px;
-      overflow-y: auto;
+    }
+
+    #chat-box {
       flex-grow: 1;
+      overflow-y: auto;
       display: flex;
       flex-direction: column;
       gap: 10px;
     }
+
+    .message {
+      padding: 12px;
+      border-radius: 10px;
+      max-width: 80%;
+      word-wrap: break-word;
+      font-size: 16px;
+      background-color: #fff9c4;
+      display: inline-block;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .user {
+      align-self: flex-end;
+      background-color: #e0f7fa;
+    }
+
+    .bot {
+      align-self: flex-start;
+      background-color: #fff9c4;
+    }
+
     #user-input {
       padding: 15px;
       width: 100%;
@@ -52,53 +120,76 @@
       font-size: 16px;
       box-sizing: border-box;
       border-radius: 5px;
+      margin-top: 20px;
     }
-    .message {
-      padding: 10px;
-      border-radius: 8px;
-      max-width: 80%;
-      word-wrap: break-word;
-    }
-    .user {
-      background-color: #e0f7fa;
-      align-self: flex-end;
-    }
-    .bot {
-      background-color: #fff9c4;
-      align-self: flex-start;
+
+    /* Adjustments for responsive design */
+    @media (max-width: 900px) {
+      body {
+        flex-direction: column;
+      }
+
+      #sidebar {
+        width: 100%;
+        box-shadow: none;
+        padding: 10px;
+      }
+
+      #chat-container {
+        width: 100%;
+        height: calc(100vh - 60px);
+      }
     }
   </style>
 </head>
 <body>
+
+  <!-- Sidebar -->
   <div id="sidebar">
     <h2>Chat History</h2>
     <ul id="conversation-list" class="conversation-list"></ul>
     <button class="btn" onclick="startNewConversation()">New Conversation</button>
   </div>
 
+  <!-- Chat Container -->
   <div id="chat-container">
     <div id="chat-box"></div>
-    <input type="text" id="user-input" placeholder="Type your message..." onkeyup="if(event.key==='Enter') sendMessage()" />
-    <div id="controls">
-      <button class="btn" onclick="deleteConversation()">Delete Conversation</button>
-    </div>
+    <input type="text" id="user-input" placeholder="Type your message..." onkeyup="if(event.key === 'Enter') sendMessage()" />
   </div>
 
   <script>
     const botId = "7471097928749367296";
     const userId = "123";
     const accessToken = "pat_kXYxi1ypVOsPCe4yBrjGRaHEoiv8sNopJLm3H0zzG4eX4phAe1ByAgzczgBW3mim";
-    let conversationId = null;
 
-    function displayMessage(content, sender = "user") {
+    let conversationId = null;
+    const conversations = {};
+
+    // Displaying a message with a typewriter effect
+    function displayMessage(content, sender = "user", isTyping = false) {
       const messageElement = document.createElement('div');
       messageElement.classList.add('message', sender);
-      messageElement.textContent = sender === "user" ? `You: ${content}` : `Bot: ${content}`;
       document.getElementById('chat-box').appendChild(messageElement);
       document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
+
+      if (isTyping) {
+        messageElement.textContent = "";
+        let index = 0;
+        const typingSpeed = 100;  // Adjust speed of typing
+        const typingInterval = setInterval(() => {
+          if (index < content.length) {
+            messageElement.textContent += content.charAt(index);
+            index++;
+          } else {
+            clearInterval(typingInterval);
+          }
+        }, typingSpeed);
+      } else {
+        messageElement.textContent = content;
+      }
     }
 
-    // Our SSE parser inside sendMessage
+    // Sending message to the bot
     async function sendMessage() {
       const message = document.getElementById('user-input').value;
       if (!message.trim()) return;
@@ -116,12 +207,10 @@
           body: JSON.stringify({
             bot_id: botId,
             user_id: userId,
-            additional_messages: [{
-              role: "user",
-              content: message,
-              content_type: "text"
-            }],
-            stream: true, // Enable stream mode
+            additional_messages: [
+              { role: "user", content: message, content_type: "text" }
+            ],
+            stream: true,
             auto_save_history: true
           })
         });
@@ -133,49 +222,26 @@
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let done = false;
-        let buffer = "";
-        // Temporary object to accumulate an event block
-        let eventObj = { event: "", data: "" };
+        let output = '';
 
-        // Helper: process a single line from the SSE stream
-        function processLine(line) {
-          if (line.startsWith("event:")) {
-            eventObj.event = line.slice("event:".length).trim();
-          } else if (line.startsWith("data:")) {
-            // Accumulate data lines (they might be split over multiple lines)
-            eventObj.data += line.slice("data:".length).trim();
-          } else if (line.trim() === "") {
-            // Blank line indicates the end of an event block
-            if (eventObj.event || eventObj.data) {
-              try {
-                // Try parsing the data as JSON
-                const parsedData = JSON.parse(eventObj.data);
-                handleEvent({ event: eventObj.event, data: parsedData });
-              } catch (e) {
-                console.error("Error parsing event data:", e, eventObj.data);
-              }
-            }
-            // Reset for the next event block
-            eventObj = { event: "", data: "" };
-          }
-        }
-
-        // Read the stream
         while (!done) {
           const { value, done: readerDone } = await reader.read();
           done = readerDone;
-          buffer += decoder.decode(value, { stream: true });
-          // Split by newline
-          let lines = buffer.split("\n");
-          // If the last line is incomplete, keep it in the buffer.
-          buffer = lines.pop();
-          for (const line of lines) {
-            processLine(line);
+          output += decoder.decode(value, { stream: true });
+
+          const events = output.split('\n');
+          for (let event of events) {
+            if (event.trim()) {
+              try {
+                const parsedEvent = JSON.parse(event);
+                handleEvent(parsedEvent); 
+              } catch (e) {
+                console.error("Error parsing event data:", e, event);
+              }
+            }
           }
-        }
-        // Process any remaining data in buffer if terminated by a newline.
-        if (buffer) {
-          processLine(buffer);
+
+          output = output.substring(output.lastIndexOf('\n') + 1);
         }
       } catch (error) {
         console.error("Error during streaming:", error);
@@ -183,27 +249,20 @@
       }
     }
 
-    // Handle parsed SSE events
+    // Handle different event types (including stream)
     function handleEvent(event) {
       switch (event.event) {
         case 'conversation.chat.created':
-          console.log('Conversation started:', event.data);
-          // Optionally update conversationId here
+          console.log('Conversation started');
           break;
         case 'conversation.chat.in_progress':
-          displayMessage("Bot is processing, please wait...", "bot");
+          displayMessage("Bot is typing...", "bot", true);
           break;
         case 'conversation.message.delta':
-          // Show incremental messages (you might accumulate these if needed)
-          displayMessage(event.data.content, "bot");
+          displayMessage(event.data.content, "bot", true);
           break;
         case 'conversation.message.completed':
-          // Completed message (final result for this message)
           displayMessage(event.data.content, "bot");
-          break;
-        case 'conversation.chat.completed':
-          console.log('Conversation completed:', event.data);
-          displayMessage("Conversation completed.", "bot");
           break;
         case 'done':
           console.log('Stream ended');
@@ -216,18 +275,64 @@
       }
     }
 
+    // Start a new conversation
     function startNewConversation() {
       conversationId = null;
       document.getElementById('chat-box').innerHTML = "";
       displayMessage("Starting a new conversation...", "bot");
     }
 
-    function deleteConversation() {
-      if (!conversationId) return;
-      document.getElementById('chat-box').innerHTML = "";
+    // Delete conversation from history
+    function deleteConversation(conversationId) {
+      delete conversations[conversationId];
       document.getElementById('conversation-list').innerHTML = "";
+      updateConversationList();
+      document.getElementById('chat-box').innerHTML = "";
       displayMessage("Conversation deleted.", "bot");
     }
+
+    // Update the conversation list on the sidebar
+    function updateConversationList() {
+      const conversationList = document.getElementById('conversation-list');
+      conversationList.innerHTML = "";
+      for (let id in conversations) {
+        const conversationItem = document.createElement('li');
+        conversationItem.classList.add('conversation-item');
+        conversationItem.textContent = `Conversation ${id}`;
+        conversationItem.onclick = () => loadConversation(id);
+        
+        const deleteButton = document.createElement('button');
+        deleteButton.classList.add('delete-btn');
+        deleteButton.textContent = 'Delete';
+        deleteButton.onclick = (e) => { 
+          e.stopPropagation(); 
+          deleteConversation(id);
+        };
+
+        conversationItem.appendChild(deleteButton);
+        conversationList.appendChild(conversationItem);
+      }
+    }
+
+    // Load conversation by its ID
+    function loadConversation(id) {
+      conversationId = id;
+      const conversation = conversations[conversationId];
+      document.getElementById('chat-box').innerHTML = "";
+      conversation.messages.forEach(msg => displayMessage(msg.content, msg.role));
+    }
+
+    // Save and load messages in history
+    function saveConversation(id, message) {
+      if (!conversations[id]) {
+        conversations[id] = { messages: [] };
+      }
+      conversations[id].messages.push({ role: 'user', content: message });
+      updateConversationList();
+    }
+
+    // Initialize history
+    updateConversationList();
   </script>
 </body>
 </html>
