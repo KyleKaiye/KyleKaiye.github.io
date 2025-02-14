@@ -196,7 +196,7 @@
       document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
     }
 
-    async function sendMessage() {
+  async function sendMessage() {
   const message = document.getElementById('user-input').value;
   if (!message.trim()) return;
 
@@ -224,46 +224,17 @@
     }
 
     const data = await response.json();
-    
-    // 检查API响应结构
-    console.log('API Response:', data);  // 添加日志
-    
-    if (data.status === 'in_progress') {
-      let statusChecked = false;
-      while (!statusChecked) {
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        const statusResponse = await fetch(`https://api.coze.cn/v3/chat/${data.data.conversation_id}`, {
-          method: 'GET',
-          headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        
-        if (!statusResponse.ok) {
-          throw new Error(`Status check failed: ${statusResponse.status}`);
-        }
-        
-        const statusData = await statusResponse.json();
-        console.log('Status Check Response:', statusData);  // 添加日志
+    console.log('Initial API Response:', data);  // 查看完整的响应结构
 
-        if (statusData.status === 'completed') {
-          // 修改这里以匹配正确的响应结构
-          const botResponse = statusData.data?.messages?.[0]?.content || "No response content";
-          displayMessage(botResponse, "bot");
-          
-          // 更新对话历史
-          if (!conversations[conversationId]) {
-            conversations[conversationId] = { messages: [] };
-          }
-          conversations[conversationId].messages.push(
-            { role: 'user', content: message },
-            { role: 'bot', content: botResponse }
-          );
-          
-          statusChecked = true;
-        }
-      }
-    } else if (data.status === 'completed') {
-      // 直接完成的情况
-      const botResponse = data.data?.messages?.[0]?.content || "No response content";
+    // 根据返回的conversation_id更新当前会话ID
+    if (data.data?.conversation_id) {
+      conversationId = data.data.conversation_id;
+    }
+
+    // 处理回复
+    if (data.data?.messages && data.data.messages.length > 0) {
+      // 直接从消息中获取回复
+      const botResponse = data.data.messages[data.data.messages.length - 1].content;
       displayMessage(botResponse, "bot");
       
       // 更新对话历史
@@ -275,7 +246,44 @@
         { role: 'bot', content: botResponse }
       );
     } else {
-      throw new Error(`Unexpected status: ${data.status}`);
+      // 如果没有直接获取到消息，尝试轮询获取结果
+      let retryCount = 0;
+      const maxRetries = 5;
+      
+      while (retryCount < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        const statusResponse = await fetch(`https://api.coze.cn/v3/chat/${conversationId}`, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        
+        if (!statusResponse.ok) {
+          throw new Error(`Status check failed: ${statusResponse.status}`);
+        }
+        
+        const statusData = await statusResponse.json();
+        console.log('Status Check Response:', statusData);
+
+        if (statusData.data?.messages && statusData.data.messages.length > 0) {
+          const botResponse = statusData.data.messages[statusData.data.messages.length - 1].content;
+          displayMessage(botResponse, "bot");
+          
+          if (!conversations[conversationId]) {
+            conversations[conversationId] = { messages: [] };
+          }
+          conversations[conversationId].messages.push(
+            { role: 'user', content: message },
+            { role: 'bot', content: botResponse }
+          );
+          break;
+        }
+        
+        retryCount++;
+        if (retryCount === maxRetries) {
+          displayMessage("No response received after multiple attempts.", "bot");
+        }
+      }
     }
 
     document.getElementById('user-input').value = "";
@@ -284,22 +292,27 @@
     displayMessage(`Error: ${error.message}`, "bot");
   }
 }
-    function startNewConversation() {
-      // Use a unique conversation ID to ensure each conversation is distinct
-      conversationId = Date.now();
-      
-      // Initialize the conversation with an empty messages array
-      conversations[conversationId] = { messages: [] };
 
-      // Clear the chatbox and start a new conversation
-      document.getElementById('chat-box').innerHTML = "";
-      displayMessage("Starting a new conversation...", "bot");
+// 修改startNewConversation函数以正确初始化会话
+function startNewConversation() {
+  conversationId = null;  // 让API自动生成新的会话ID
+  
+  // 初始化新的对话记录
+  const tempId = Date.now();  // 临时ID用于UI显示
+  conversations[tempId] = { messages: [] };
 
-      // Add this conversation to the list on the sidebar
-      const conversationList = document.getElementById('conversation-list');
-      const newConversationItem = document.createElement('li');
-      newConversationItem.classList.add('conversation-item');
-      newConversationItem.textContent = `Conversation ${conversationId}`;
+  // 清理UI
+  document.getElementById('chat-box').innerHTML = "";
+  displayMessage("Starting a new conversation...", "bot");
+
+  // 更新侧边栏
+  const conversationList = document.getElementById('conversation-list');
+  const newConversationItem = document.createElement('li');
+  newConversationItem.classList.add('conversation-item');
+  newConversationItem.textContent = `Conversation ${tempId}`;
+  newConversationItem.onclick = () => loadConversation(tempId);
+  conversationList.appendChild(newConversationItem);
+}
       
       // When the conversation item is clicked, load the conversation
       newConversationItem.onclick = () => loadConversation(conversationId);
