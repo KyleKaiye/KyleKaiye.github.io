@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Enhanced Chat Interface</title>
   <style>
-    /* Overall layout */
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       margin: 0;
@@ -15,8 +14,7 @@
       background-color: #f5f5f5;
       color: #333;
     }
-    
-    /* Sidebar styles */
+
     #sidebar {
       width: 250px;
       background-color: #fff;
@@ -71,7 +69,6 @@
       display: block;
     }
 
-    /* Chat area styles */
     #chat-container {
       flex-grow: 1;
       display: flex;
@@ -123,7 +120,6 @@
       margin-top: 20px;
     }
 
-    /* Adjustments for responsive design */
     @media (max-width: 900px) {
       body {
         flex-direction: column;
@@ -143,15 +139,12 @@
   </style>
 </head>
 <body>
-
-  <!-- Sidebar -->
   <div id="sidebar">
     <h2>Chat History</h2>
     <ul id="conversation-list" class="conversation-list"></ul>
     <button class="btn" onclick="startNewConversation()">New Conversation</button>
   </div>
 
-  <!-- Chat Container -->
   <div id="chat-container">
     <div id="chat-box"></div>
     <input type="text" id="user-input" placeholder="Type your message..." onkeyup="if(event.key === 'Enter') sendMessage()" />
@@ -165,7 +158,6 @@
     let conversationId = null;
     const conversations = {};
 
-    // Displaying a message with a typewriter effect
     function displayMessage(content, sender = "user", isTyping = false) {
       const messageElement = document.createElement('div');
       messageElement.classList.add('message', sender);
@@ -175,7 +167,7 @@
       if (isTyping) {
         messageElement.textContent = "";
         let index = 0;
-        const typingSpeed = 100;  // Adjust speed of typing
+        const typingSpeed = 100;
         const typingInterval = setInterval(() => {
           if (index < content.length) {
             messageElement.textContent += content.charAt(index);
@@ -189,79 +181,72 @@
       }
     }
 
-    // Sending message to the bot
     async function sendMessage() {
-  const message = document.getElementById('user-input').value;
-  if (!message.trim()) return;
+      const message = document.getElementById('user-input').value;
+      if (!message.trim()) return;
 
-  displayMessage(message, "user");
-  document.getElementById('user-input').value = ""; // Clear input
+      displayMessage(message, "user");
+      document.getElementById('user-input').value = ""; 
 
-  try {
-    const response = await fetch('https://api.coze.cn/v3/chat', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        bot_id: botId,
-        user_id: userId,
-        additional_messages: [
-          { role: "user", content: message, content_type: "text" }
-        ],
-        stream: true,
-        auto_save_history: true
-      })
-    });
+      try {
+        const response = await fetch('https://api.coze.cn/v3/chat', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            bot_id: botId,
+            user_id: userId,
+            additional_messages: [
+              { role: "user", content: message, content_type: "text" }
+            ],
+            stream: true,
+            auto_save_history: true
+          })
+        });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let done = false;
-    let output = '';
-
-    while (!done) {
-      const { value, done: readerDone } = await reader.read();
-      done = readerDone;
-      output += decoder.decode(value, { stream: true });
-
-      const events = output.split('\n');
-      for (let event of events) {
-        if (event.trim()) {
-          try {
-            // Check for "data:" prefix and parse correctly
-            if (event.startsWith('data:')) {
-              const eventData = event.slice(5).trim();  // Extract data: content
-              const parsedEvent = JSON.parse(eventData);  // Parse the JSON content of the data
-              handleEvent(parsedEvent);  // Handle the parsed event
-            }
-          } catch (e) {
-            console.error("Error parsing event data:", e, event);
-          }
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
         }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let done = false;
+        let output = '';
+
+        while (!done) {
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+          output += decoder.decode(value, { stream: true });
+
+          const events = output.split('\n');
+          for (let event of events) {
+            if (event.trim()) {
+              try {
+                if (event.startsWith('data:')) {
+                  const eventData = event.slice(5).trim();
+                  const parsedEvent = JSON.parse(eventData);
+                  handleEvent(parsedEvent);
+                }
+              } catch (e) {
+                console.error("Error parsing event data:", e, event);
+              }
+            }
+          }
+          output = output.substring(output.lastIndexOf('\n') + 1);
+        }
+      } catch (error) {
+        console.error("Error during streaming:", error);
+        displayMessage(`Error: ${error.message}`, "bot");
       }
-
-      // Make sure the remaining part of the message is stored
-      output = output.substring(output.lastIndexOf('\n') + 1);
     }
-  } catch (error) {
-    console.error("Error during streaming:", error);
-    displayMessage(`Error: ${error.message}`, "bot");
-  }
-}
 
-    // Handle different event types (including stream)
     function handleEvent(event) {
       switch (event.event) {
         case 'conversation.chat.created':
-          console.log('Conversation started');
-          break;
         case 'conversation.chat.in_progress':
-          displayMessage("Bot is typing...", "bot", true);
+          console.log('Conversation in progress...');
           break;
         case 'conversation.message.delta':
           displayMessage(event.data.content, "bot", true);
@@ -269,34 +254,36 @@
         case 'conversation.message.completed':
           displayMessage(event.data.content, "bot");
           break;
-        case 'done':
-          console.log('Stream ended');
+        case 'conversation.chat.completed':
+          console.log('Conversation completed');
           break;
         case 'error':
           displayMessage(`Error: ${event.data.error_message}`, "bot");
+          break;
+        case 'done':
+          console.log('Stream finished');
           break;
         default:
           console.log("Unhandled event:", event);
       }
     }
 
-    // Start a new conversation
     function startNewConversation() {
       conversationId = null;
       document.getElementById('chat-box').innerHTML = "";
       displayMessage("Starting a new conversation...", "bot");
+      const tempId = Date.now().toString();
+      conversations[tempId] = { messages: [] };
+      updateConversationList();
     }
 
-    // Delete conversation from history
-    function deleteConversation(conversationId) {
-      delete conversations[conversationId];
-      document.getElementById('conversation-list').innerHTML = "";
+    function deleteConversation(id) {
+      delete conversations[id];
       updateConversationList();
       document.getElementById('chat-box').innerHTML = "";
       displayMessage("Conversation deleted.", "bot");
     }
 
-    // Update the conversation list on the sidebar
     function updateConversationList() {
       const conversationList = document.getElementById('conversation-list');
       conversationList.innerHTML = "";
@@ -305,12 +292,12 @@
         conversationItem.classList.add('conversation-item');
         conversationItem.textContent = `Conversation ${id}`;
         conversationItem.onclick = () => loadConversation(id);
-        
+
         const deleteButton = document.createElement('button');
         deleteButton.classList.add('delete-btn');
         deleteButton.textContent = 'Delete';
-        deleteButton.onclick = (e) => { 
-          e.stopPropagation(); 
+        deleteButton.onclick = (e) => {
+          e.stopPropagation();
           deleteConversation(id);
         };
 
@@ -319,7 +306,6 @@
       }
     }
 
-    // Load conversation by its ID
     function loadConversation(id) {
       conversationId = id;
       const conversation = conversations[conversationId];
@@ -327,16 +313,7 @@
       conversation.messages.forEach(msg => displayMessage(msg.content, msg.role));
     }
 
-    // Save and load messages in history
-    function saveConversation(id, message) {
-      if (!conversations[id]) {
-        conversations[id] = { messages: [] };
-      }
-      conversations[id].messages.push({ role: 'user', content: message });
-      updateConversationList();
-    }
-
-    // Initialize history
+    // Initialize the sidebar
     updateConversationList();
   </script>
 </body>
