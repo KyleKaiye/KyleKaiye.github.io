@@ -194,6 +194,7 @@ async function sendMessage() {
   if (!message.trim()) return;
 
   displayMessage(message, "user");
+  document.getElementById('user-input').value = ""; // 立即清空输入框
 
   try {
     const response = await fetch('https://api.coze.cn/v3/chat', {
@@ -206,9 +207,14 @@ async function sendMessage() {
         bot_id: botId,
         user_id: userId,
         stream: false,
-        auto_save_history: true,
         conversation_id: conversationId,
-        additional_messages: [{ "role": "user", "content": message, "content_type": "text" }]
+        messages: [
+          {
+            "role": "user",
+            "content": message,
+            "content_type": "text"
+          }
+        ]
       })
     });
 
@@ -217,9 +223,8 @@ async function sendMessage() {
     }
 
     const data = await response.json();
-    console.log('Initial API Response:', data);
+    console.log('API Response:', data);
 
-    // 检查API响应是否成功
     if (data.code !== 0) {
       throw new Error(`API Error: ${data.msg}`);
     }
@@ -229,62 +234,25 @@ async function sendMessage() {
       conversationId = data.data.conversation_id;
     }
 
-    // 使用消息ID获取响应
-    if (data.data?.id) {
-      const messageId = data.data.id;
-      let attempts = 0;
-      const maxAttempts = 10;
+    // 获取bot的回复 - 从websocket或其他response字段
+    // 这里需要根据实际API响应结构调整
+    if (data.data?.response) {
+      const botResponse = data.data.response;
+      displayMessage(botResponse, "bot");
       
-      while (attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        try {
-          const msgResponse = await fetch('https://api.coze.cn/v3/chat/message', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              message_id: messageId,
-              conversation_id: conversationId
-            })
-          });
-
-          if (!msgResponse.ok) {
-            throw new Error(`Message check failed: ${msgResponse.status}`);
-          }
-
-          const msgData = await msgResponse.json();
-          console.log('Message Check Response:', msgData);
-
-          if (msgData.data?.content) {
-            const botResponse = msgData.data.content;
-            displayMessage(botResponse, "bot");
-            
-            if (!conversations[conversationId]) {
-              conversations[conversationId] = { messages: [] };
-            }
-            conversations[conversationId].messages.push(
-              { role: 'user', content: message },
-              { role: 'bot', content: botResponse }
-            );
-            break;
-          }
-        } catch (error) {
-          console.error("Error checking message:", error);
-        }
-
-        attempts++;
-        if (attempts === maxAttempts) {
-          displayMessage("No response received after multiple attempts. Please try again.", "bot");
-        }
+      // 保存对话历史
+      if (!conversations[conversationId]) {
+        conversations[conversationId] = { messages: [] };
       }
+      conversations[conversationId].messages.push(
+        { role: 'user', content: message },
+        { role: 'bot', content: botResponse }
+      );
     } else {
-      displayMessage("Failed to get message ID. Please try again.", "bot");
+      console.log('Full API response:', data);
+      displayMessage("Waiting for bot response...", "bot");
     }
 
-    document.getElementById('user-input').value = "";
   } catch (error) {
     console.error("Error during API request:", error);
     displayMessage(`Error: ${error.message}`, "bot");
