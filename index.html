@@ -40,72 +40,79 @@
     }
 
     async function sendMessage() {
-      const message = document.getElementById('user-input').value;
-      if (!message.trim()) return;
+  const message = document.getElementById('user-input').value;
+  if (!message.trim()) return;
 
-      displayMessage(message, "user");
-      document.getElementById('user-input').value = ""; // Clear input field
+  displayMessage(message, "user");
+  document.getElementById('user-input').value = ""; // Clear input field
 
-      try {
-        const response = await fetch('https://api.coze.cn/v3/chat', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            bot_id: botId,
-            user_id: userId,
-            stream: false,
-            auto_save_history: true,
-            conversation_id: conversationId,
-            additional_messages: [
-              {
-                "role": "user",
-                "content": message,
-                "content_type": "text"
-              }
-            ]
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log('Initial API Response:', data);
-
-        if (data.code !== 0) {
-          throw new Error(`API Error: ${data.msg}`);
-        }
-
-        // Update conversation_id
-        if (data.data?.conversation_id) {
-          conversationId = data.data.conversation_id;
-        }
-
-        // Check if there's a reply from the bot
-        if (data.data?.reply_content) {
-          const botResponse = data.data.reply_content;
-          displayMessage(botResponse, "bot");
-          
-          if (!conversations[conversationId]) {
-            conversations[conversationId] = { messages: [] };
+  try {
+    const response = await fetch('https://api.coze.cn/v3/chat', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        bot_id: botId,
+        user_id: userId,
+        stream: false,
+        auto_save_history: true,
+        conversation_id: conversationId,
+        additional_messages: [
+          {
+            "role": "user",
+            "content": message,
+            "content_type": "text"
           }
-          conversations[conversationId].messages.push(
-            { role: 'user', content: message },
-            { role: 'bot', content: botResponse }
-          );
-        } else {
-          displayMessage("No direct response from the bot. Please try again.", "bot");
-        }
+        ]
+      })
+    });
 
-      } catch (error) {
-        console.error("Error during API request:", error);
-        displayMessage(`Error: ${error.message}`, "bot");
-      }
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
     }
+
+    const data = await response.json();
+    console.log('Initial API Response:', data);
+
+    if (data.code !== 0) {
+      throw new Error(`API Error: ${data.msg}`);
+    }
+
+    // Update conversation_id
+    if (data.data?.conversation_id) {
+      conversationId = data.data.conversation_id;
+    }
+
+    // Retry mechanism if the bot response is still in progress
+    if (data.data?.status === "in_progress") {
+      displayMessage("Bot is still processing your request, please wait...", "bot");
+
+      setTimeout(async () => {
+        await sendMessage();  // Retry after a short delay
+      }, 2000);  // 2 seconds delay before retrying
+    } else if (data.data?.reply_content) {
+      const botResponse = data.data.reply_content;
+      displayMessage(botResponse, "bot");
+      
+      if (!conversations[conversationId]) {
+        conversations[conversationId] = { messages: [] };
+      }
+      conversations[conversationId].messages.push(
+        { role: 'user', content: message },
+        { role: 'bot', content: botResponse }
+      );
+    } else {
+      displayMessage("No direct response from the bot. Please try again.", "bot");
+    }
+
+  } catch (error) {
+    console.error("Error during API request:", error);
+    displayMessage(`Error: ${error.message}`, "bot");
+  }
+}
+
 
     function startNewConversation() {
       conversationId = null;
