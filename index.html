@@ -253,54 +253,46 @@
       }
     }
 
- function startNewConversation() {
-  // Use a unique conversation ID to ensure each conversation is distinct
-  conversationId = Date.now();
-  
-  // Initialize the conversation with an empty messages array
-  conversations[conversationId] = { messages: [] };
+    function startNewConversation() {
+      // Use a unique conversation ID to ensure each conversation is distinct
+      conversationId = Date.now();
+      
+      // Initialize the conversation with an empty messages array
+      conversations[conversationId] = { messages: [] };
 
-  // Clear the chatbox and start a new conversation
-  document.getElementById('chat-box').innerHTML = "";
-  displayMessage("Starting a new conversation...", "bot");
+      // Clear the chatbox and start a new conversation
+      document.getElementById('chat-box').innerHTML = "";
+      displayMessage("Starting a new conversation...", "bot");
 
-  // Add this conversation to the list on the sidebar
-  const conversationList = document.getElementById('conversation-list');
-  const newConversationItem = document.createElement('li');
-  newConversationItem.classList.add('conversation-item');
-  newConversationItem.textContent = `Conversation ${conversationId}`;
-  
-  // When the conversation item is clicked, load the conversation
-  newConversationItem.onclick = () => loadConversation(conversationId);
-  
-  conversationList.appendChild(newConversationItem);
-}
+      // Add this conversation to the list on the sidebar
+      const conversationList = document.getElementById('conversation-list');
+      const newConversationItem = document.createElement('li');
+      newConversationItem.classList.add('conversation-item');
+      newConversationItem.textContent = `Conversation ${conversationId}`;
+      
+      // When the conversation item is clicked, load the conversation
+      newConversationItem.onclick = () => loadConversation(conversationId);
+      conversationList.appendChild(newConversationItem);
+    }
 
-function loadConversation(id) {
-  // Check if the conversation exists before trying to load it
-  if (!conversations[id]) {
-    console.error(`Conversation with ID ${id} not found.`);
-    return;
-  }
-
-  conversationId = id;
-  const conversation = conversations[conversationId];
-
-  // Clear the current chatbox and load the saved messages
-  document.getElementById('chat-box').innerHTML = "";
-  conversation.messages.forEach(message => {
-    displayMessage(message.content, message.role);
-  });
-}
+    function loadConversation(id) {
+      conversationId = id;
+      const conversation = conversations[conversationId];
+      document.getElementById('chat-box').innerHTML = "";
+      conversation.messages.forEach(msg => displayMessage(msg.content, msg.role));
+    }
 
     function deleteConversation() {
       if (!conversationId) return;
+      
       delete conversations[conversationId];
       conversationId = null;
+      
       document.getElementById('chat-box').innerHTML = "";
+      document.getElementById('conversation-list').innerHTML = "";
+      displayMessage("Conversation deleted.", "bot");
     }
-
-    window.onload = () => startNewConversation(); 
   </script>
+
 </body>
 </html>
