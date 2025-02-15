@@ -234,6 +234,7 @@
         height: auto;
         box-shadow: none;
         padding: 10px;
+        display: none; /* Hide sidebar by default on mobile */
       }
 
       #chat-container {
@@ -242,7 +243,7 @@
       }
 
       #sidebar-toggle {
-        display: none;
+        display: block; /* Show sidebar toggle button */
       }
     }
   </style>
@@ -296,12 +297,16 @@
       sidebarToggle.classList.toggle('hidden');
     });
 
+    if (window.innerWidth <= 900) {
+      sidebar.classList.add('hidden');
+    }
+
     // Chat input functionality
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
 
     userInput.addEventListener('input', function() {
-      sendButton.disabled = !this.value.trim();
+      sendButton.disabled = !this.value.trim();  
       this.style.height = 'auto';
       this.style.height = Math.min(this.scrollHeight, 200) + 'px';
     });
@@ -386,31 +391,6 @@
             saveConversationsToStorage();
           }
           break;
-
-        case 'function_call':
-        case 'tool_response':
-        case 'verbose':
-        case 'follow_up':
-          console.log(`Received ${event.type} event:`, event);
-          break;
-
-        default:
-          if (event.status) {
-            switch (event.status) {
-              case 'created':
-                console.log('Chat created');
-                break;
-              case 'in_progress':
-                console.log('Chat in progress');
-                break;
-              case 'completed':
-                console.log('Chat completed');
-                if (event.usage) {
-                  console.log('Usage stats:', event.usage);
-                }
-                break;
-            }
-          }
       }
 
       chatBox.scrollTop = chatBox.scrollHeight;
@@ -504,6 +484,7 @@
       displayMessage("Starting a new conversation...", "bot");
       const tempId = Date.now().toString();
       conversations[tempId] = { messages: [] };
+      saveConversationsToStorage();
       updateConversationList();
     }
 
