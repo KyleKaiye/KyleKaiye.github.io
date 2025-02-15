@@ -23,6 +23,7 @@
       padding: 15px;
       margin-left: 20px;
       margin-top: 10px;
+      transition: margin-left 0.3s ease;
     }
 
     .main-container {
@@ -49,20 +50,19 @@
 
     #sidebar-toggle {
       position: fixed;
-      left: 250px;
+      left: 20px;
       top: 20px;
       background-color: #4CAF50;
       color: white;
       border: none;
       padding: 10px;
       cursor: pointer;
-      border-radius: 0 5px 5px 0;
-      transition: left 0.3s ease;
+      border-radius: 5px;
       z-index: 1000;
     }
 
     #sidebar-toggle.hidden {
-      left: 0;
+      left: -50px;
     }
 
     #sidebar h2 {
@@ -225,15 +225,8 @@
     }
 
     @media (max-width: 900px) {
-      .main-container {
-        flex-direction: column;
-      }
-
       #sidebar {
-        width: 100%;
-        height: auto;
-        box-shadow: none;
-        padding: 10px;
+        display: none; /* Hide sidebar by default on mobile */
       }
 
       #chat-container {
@@ -242,13 +235,17 @@
       }
 
       #sidebar-toggle {
-        display: none;
+        display: block;
+      }
+
+      #sidebar-toggle.hidden {
+        left: 0;
       }
     }
   </style>
 </head>
 <body>
-  <div class="header">
+  <div class="header" id="header">
     Seagull GPT
   </div>
 
@@ -290,10 +287,13 @@
     // Sidebar toggle functionality
     const sidebarToggle = document.getElementById('sidebar-toggle');
     const sidebar = document.getElementById('sidebar');
-    
+    const header = document.getElementById('header');
+
     sidebarToggle.addEventListener('click', () => {
       sidebar.classList.toggle('hidden');
       sidebarToggle.classList.toggle('hidden');
+      // Adjust header position based on sidebar visibility
+      header.style.marginLeft = sidebar.classList.contains('hidden') ? '0px' : '250px';
     });
 
     // Chat input functionality
@@ -343,6 +343,88 @@
           role: sender
         });
         saveConversationsToStorage();
+      }
+    }
+
+    async function sendMessage() {
+      const message = userInput.value.trim();
+      if (!message) return;
+
+      displayMessage(message, "user");
+      userInput.value = "";
+      userInput.style.height = 'auto';
+      sendButton.disabled = true;
+
+      try {
+        const response = await fetch('https://api.coze.cn/v3/chat', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            bot_id: botId,
+            user_id: userId,
+            additional_messages: [
+              { role: "user", content: message, content_type: "text" }
+            ],
+            stream: true,
+            auto_save_history: true
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+            if (line.trim()) {
+              try {
+                if (line.startsWith('data:')) {
+                  const eventData = line.slice(5).trim();
+                  if (eventData === '[DONE]') {
+                    console.log('Stream finished');
+                    continue;
+                  }
+                  const parsedEvent = JSON.parse(eventData);
+                  await handleEvent(parsedEvent);
+                }
+              } catch (e) {
+                console.error("Error parsing event data:", e, line);
+              }
+            }
+          }
+        }
+        
+        if (buffer.trim()) {
+          try {
+            if (buffer.startsWith('data:')) {
+              const eventData = buffer.slice(5).trim();
+              if (eventData !== '[DONE]') {
+                const parsedEvent = JSON.parse(eventData);
+                await handleEvent(parsedEvent);
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing final event data:", e, buffer);
+          }
+        }
+      } catch (error) {
+        console.error("Error during streaming:", error);
+        displayMessage(`Error: ${error.message}`, "bot");
       }
     }
 
