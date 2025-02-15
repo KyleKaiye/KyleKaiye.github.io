@@ -247,6 +247,7 @@
       }
     }
   </style>
+<script src="https://cdn.jsdelivr.net/npm/marked@4.0.12/lib/marked.min.js"></script>
 </head>
 <body>
   <div class="header">
@@ -332,10 +333,13 @@
       localStorage.setItem('conversations', JSON.stringify(conversations));
     }
 
+    // This function will render messages with Markdown formatting
     function displayMessage(content, sender = "user", save = true) {
       const messageElement = document.createElement('div');
       messageElement.classList.add('message', sender);
-      messageElement.textContent = content;
+      
+      // Parse the content with marked.js to handle markdown
+      messageElement.innerHTML = marked(content);
       document.getElementById('chat-box').appendChild(messageElement);
       document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
 
@@ -524,7 +528,7 @@
       conversation.messages.forEach(msg => displayMessage(msg.content, msg.role));
     }
 
-    // 初始化侧边栏
+    // Initialize sidebar
     updateConversationList();
   </script>
 </body>
