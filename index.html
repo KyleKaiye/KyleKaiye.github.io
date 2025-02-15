@@ -247,7 +247,7 @@
       }
     }
   </style>
-<script src="https://cdn.jsdelivr.net/npm/marked@4.0.12/lib/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@4.0.12/lib/marked.min.js"></script>
 </head>
 <body>
   <div class="header">
@@ -289,7 +289,6 @@
     let conversationId = null;
     let conversations = {};
 
-    // Sidebar toggle functionality
     const sidebarToggle = document.getElementById('sidebar-toggle');
     const sidebar = document.getElementById('sidebar');
     
@@ -302,10 +301,10 @@
       sidebar.classList.add('hidden');
     }
 
-    // Chat input functionality
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
 
+    // Enable or disable send button based on input
     userInput.addEventListener('input', function() {
       sendButton.disabled = !this.value.trim();  
       this.style.height = 'auto';
@@ -321,25 +320,10 @@
       }
     }
 
-    function loadConversationsFromStorage() {
-      const saved = localStorage.getItem('conversations');
-      if (saved) {
-        conversations = JSON.parse(saved);
-      }
-      return Object.keys(conversations).length > 0;
-    }
-
-    function saveConversationsToStorage() {
-      localStorage.setItem('conversations', JSON.stringify(conversations));
-    }
-
-    // This function will render messages with Markdown formatting
     function displayMessage(content, sender = "user", save = true) {
       const messageElement = document.createElement('div');
       messageElement.classList.add('message', sender);
-      
-      // Parse the content with marked.js to handle markdown
-      messageElement.innerHTML = marked(content);
+      messageElement.innerHTML = marked(content); // Parse with marked.js
       document.getElementById('chat-box').appendChild(messageElement);
       document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
 
@@ -353,51 +337,6 @@
         });
         saveConversationsToStorage();
       }
-    }
-
-    async function handleEvent(event) {
-      if (event === '[DONE]') {
-        console.log('Stream completed');
-        return;
-      }
-
-      const chatBox = document.getElementById('chat-box');
-      let messageElement = chatBox.lastElementChild;
-
-      switch (event.type) {
-        case 'answer':
-          if (!messageElement || !messageElement.classList.contains('bot')) {
-            messageElement = document.createElement('div');
-            messageElement.classList.add('message', 'bot');
-            chatBox.appendChild(messageElement);
-          }
-          
-          const content = event.content || '';
-          if (messageElement.textContent) {
-            messageElement.textContent += content;
-          } else {
-            messageElement.textContent = content;
-          }
-
-          if (conversationId && content) {
-            if (!conversations[conversationId].messages) {
-              conversations[conversationId].messages = [];
-            }
-            const lastMessage = conversations[conversationId].messages[conversations[conversationId].messages.length - 1];
-            if (lastMessage && lastMessage.role === 'bot') {
-              lastMessage.content = messageElement.textContent;
-            } else {
-              conversations[conversationId].messages.push({
-                content: messageElement.textContent,
-                role: 'bot'
-              });
-            }
-            saveConversationsToStorage();
-          }
-          break;
-      }
-
-      chatBox.scrollTop = chatBox.scrollHeight;
     }
 
     async function sendMessage() {
@@ -482,6 +421,55 @@
       }
     }
 
+    function handleEvent(event) {
+      if (event === '[DONE]') {
+        console.log('Stream completed');
+        return;
+      }
+
+      const chatBox = document.getElementById('chat-box');
+      let messageElement = chatBox.lastElementChild;
+
+      switch (event.type) {
+        case 'answer':
+          if (!messageElement || !messageElement.classList.contains('bot')) {
+            messageElement = document.createElement('div');
+            messageElement.classList.add('message', 'bot');
+            chatBox.appendChild(messageElement);
+          }
+          
+          const content = event.content || '';
+          if (messageElement.textContent) {
+            messageElement.textContent += content;
+          } else {
+            messageElement.textContent = content;
+          }
+
+          if (conversationId && content) {
+            if (!conversations[conversationId].messages) {
+              conversations[conversationId].messages = [];
+            }
+            const lastMessage = conversations[conversationId].messages[conversations[conversationId].messages.length - 1];
+            if (lastMessage && lastMessage.role === 'bot') {
+              lastMessage.content = messageElement.textContent;
+            } else {
+              conversations[conversationId].messages.push({
+                content: messageElement.textContent,
+                role: 'bot'
+              });
+            }
+            saveConversationsToStorage();
+          }
+          break;
+      }
+
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function saveConversationsToStorage() {
+      localStorage.setItem('conversations', JSON.stringify(conversations));
+    }
+
     function startNewConversation() {
       conversationId = null;
       document.getElementById('chat-box').innerHTML = "";
@@ -490,13 +478,6 @@
       conversations[tempId] = { messages: [] };
       saveConversationsToStorage();
       updateConversationList();
-    }
-
-    function deleteConversation(id) {
-      delete conversations[id];
-      updateConversationList();
-      document.getElementById('chat-box').innerHTML = "";
-      displayMessage("Conversation deleted.", "bot");
     }
 
     function updateConversationList() {
@@ -528,7 +509,6 @@
       conversation.messages.forEach(msg => displayMessage(msg.content, msg.role));
     }
 
-    // Initialize sidebar
     updateConversationList();
   </script>
 </body>
