@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Seagull GPT</title>
   <style>
-    /* Original styles */
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       margin: 0;
@@ -17,7 +16,6 @@
       color: #333;
     }
 
-    /* Added header styles */
     .header {
       background-color: #4CAF50;
       color: white;
@@ -28,14 +26,12 @@
       box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     }
 
-    /* Modified main content container */
     .main-container {
       display: flex;
       flex: 1;
       overflow: hidden;
     }
 
-    /* Modified sidebar styles */
     #sidebar {
       width: 250px;
       background-color: #fff;
@@ -51,7 +47,6 @@
       margin-left: -250px;
     }
 
-    /* Toggle button styles */
     #sidebar-toggle {
       position: fixed;
       left: 250px;
@@ -70,7 +65,6 @@
       left: 0;
     }
 
-    /* Rest of the original styles */
     #sidebar h2 {
       margin: 0;
       font-size: 20px;
@@ -132,6 +126,7 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
+      margin-bottom: 20px;
     }
 
     .message {
@@ -155,19 +150,78 @@
       background-color: #fff9c4;
     }
 
-    #user-input {
-      padding: 15px;
-      width: 100%;
-      border: none;
-      border-top: 1px solid #ddd;
-      font-size: 16px;
-      box-sizing: border-box;
-      border-radius: 5px;
+    .input-container {
       margin-top: 20px;
+      position: relative;
+      border: 1px solid #e5e5e5;
+      border-radius: 12px;
+      background: #fff;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+    }
+
+    #user-input {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      background: none;
+      font-size: 16px;
+      outline: none;
+      margin: 0;
+      resize: none;
+      min-height: 24px;
+      max-height: 200px;
+      line-height: 1.5;
+    }
+
+    #send-button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.3s;
+      margin-left: 8px;
+    }
+
+    #send-button:hover {
+      background-color: #45a049;
+    }
+
+    #send-button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+
+    .send-icon {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
     }
 
     .selected {
       border: 2px solid #4CAF50;
+    }
+
+    .btn {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-top: 20px;
+    }
+
+    .btn:hover {
+      background-color: #45a049;
     }
 
     @media (max-width: 900px) {
@@ -191,32 +245,14 @@
         display: none;
       }
     }
-
-    .btn {
-      background-color: #4CAF50;
-      color: white;
-      padding: 10px 20px;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 16px;
-      margin-top: 20px;
-    }
-
-    .btn:hover {
-      background-color: #45a049;
-    }
   </style>
 </head>
 <body>
-  <!-- Added header -->
   <div class="header">
     Seagull GPT
   </div>
 
-  <!-- Added main container -->
   <div class="main-container">
-    <!-- Added sidebar toggle button -->
     <button id="sidebar-toggle">☰</button>
 
     <div id="sidebar">
@@ -227,14 +263,31 @@
 
     <div id="chat-container">
       <div id="chat-box"></div>
-      <input type="text" id="user-input" placeholder="Type your message..." onkeyup="if(event.key === 'Enter') sendMessage()" />
+      <div class="input-container">
+        <textarea 
+          id="user-input" 
+          placeholder="Type your message..." 
+          rows="1"
+          onkeydown="handleKeyDown(event)"
+        ></textarea>
+        <button id="send-button" onclick="sendMessage()" disabled>
+          <svg class="send-icon" viewBox="0 0 24 24">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </div>
     </div>
   </div>
 
   <script>
-    // Original script content remains the same until window.onload
+    const botId = "7471097928749367296";
+    const userId = "123";
+    const accessToken = "pat_kXYxi1ypVOsPCe4yBrjGRaHEoiv8sNopJLm3H0zzG4eX4phAe1ByAgzczgBW3mim";
 
-    // Add sidebar toggle functionality
+    let conversationId = null;
+    let conversations = {};
+
+    // Sidebar toggle functionality
     const sidebarToggle = document.getElementById('sidebar-toggle');
     const sidebar = document.getElementById('sidebar');
     
@@ -243,48 +296,94 @@
       sidebarToggle.classList.toggle('hidden');
     });
 
-    // Original script content
-    const botId = "7471097928749367296";
-    const userId = "123";
-    const accessToken = "pat_kXYxi1ypVOsPCe4yBrjGRaHEoiv8sNopJLm3H0zzG4eX4phAe1ByAgzczgBW3mim";
+    // Chat input functionality
+    const userInput = document.getElementById('user-input');
+    const sendButton = document.getElementById('send-button');
 
-    let conversationId = null;
-    let conversations = {};
+    userInput.addEventListener('input', function() {
+      sendButton.disabled = !this.value.trim();
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+    });
 
-    function displayMessage(content, sender = "user") {
+    function handleKeyDown(event) {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        if (!sendButton.disabled) {
+          sendMessage();
+        }
+      }
+    }
+
+    function loadConversationsFromStorage() {
+      const saved = localStorage.getItem('conversations');
+      if (saved) {
+        conversations = JSON.parse(saved);
+      }
+      return Object.keys(conversations).length > 0;
+    }
+
+    function saveConversationsToStorage() {
+      localStorage.setItem('conversations', JSON.stringify(conversations));
+    }
+
+    function displayMessage(content, sender = "user", save = true) {
       const messageElement = document.createElement('div');
       messageElement.classList.add('message', sender);
       messageElement.textContent = content;
       document.getElementById('chat-box').appendChild(messageElement);
       document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
+
+      if (save && conversationId) {
+        if (!conversations[conversationId].messages) {
+          conversations[conversationId].messages = [];
+        }
+        conversations[conversationId].messages.push({
+          content: content,
+          role: sender
+        });
+        saveConversationsToStorage();
+      }
     }
 
     async function handleEvent(event) {
-      // 如果事件是字符串 "[DONE]"，直接返回
       if (event === '[DONE]') {
         console.log('Stream completed');
         return;
       }
 
-      // 获取消息容器
       const chatBox = document.getElementById('chat-box');
       let messageElement = chatBox.lastElementChild;
 
       switch (event.type) {
         case 'answer':
-          // 如果是第一条消息，创建新的消息元素
           if (!messageElement || !messageElement.classList.contains('bot')) {
             messageElement = document.createElement('div');
             messageElement.classList.add('message', 'bot');
             chatBox.appendChild(messageElement);
           }
           
-          // 追加内容
           const content = event.content || '';
           if (messageElement.textContent) {
             messageElement.textContent += content;
           } else {
             messageElement.textContent = content;
+          }
+
+          if (conversationId && content) {
+            if (!conversations[conversationId].messages) {
+              conversations[conversationId].messages = [];
+            }
+            const lastMessage = conversations[conversationId].messages[conversations[conversationId].messages.length - 1];
+            if (lastMessage && lastMessage.role === 'bot') {
+              lastMessage.content = messageElement.textContent;
+            } else {
+              conversations[conversationId].messages.push({
+                content: messageElement.textContent,
+                role: 'bot'
+              });
+            }
+            saveConversationsToStorage();
           }
           break;
 
@@ -292,12 +391,10 @@
         case 'tool_response':
         case 'verbose':
         case 'follow_up':
-          // 记录这些事件但不显示在界面上
           console.log(`Received ${event.type} event:`, event);
           break;
 
         default:
-          // 处理其他类型的事件
           if (event.status) {
             switch (event.status) {
               case 'created':
@@ -316,17 +413,17 @@
           }
       }
 
-      // 滚动到底部
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
     async function sendMessage() {
-      const message = document.getElementById('user-input').value;
-      if (!message.trim()) return;
+      const message = userInput.value.trim();
+      if (!message) return;
 
-      // 显示用户消息
       displayMessage(message, "user");
-      document.getElementById('user-input').value = "";
+      userInput.value = "";
+      userInput.style.height = 'auto';
+      sendButton.disabled = true;
 
       try {
         const response = await fetch('https://api.coze.cn/v3/chat', {
@@ -361,7 +458,6 @@
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
           
-          // 处理完整的行，保留最后一个不完整的行
           buffer = lines.pop() || '';
           
           for (const line of lines) {
@@ -383,7 +479,6 @@
           }
         }
         
-        // 处理缓冲区中剩余的数据
         if (buffer.trim()) {
           try {
             if (buffer.startsWith('data:')) {
