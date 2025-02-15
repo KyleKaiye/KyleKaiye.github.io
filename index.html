@@ -319,6 +319,52 @@
       }
     }
 
+    // Handle event (parse the incoming event data from API)
+    async function handleEvent(event) {
+      if (event === '[DONE]') {
+        console.log('Stream completed');
+        return;
+      }
+
+      const chatBox = document.getElementById('chat-box');
+      let messageElement = chatBox.lastElementChild;
+
+      switch (event.type) {
+        case 'answer':
+          if (!messageElement || !messageElement.classList.contains('bot')) {
+            messageElement = document.createElement('div');
+            messageElement.classList.add('message', 'bot');
+            chatBox.appendChild(messageElement);
+          }
+          
+          const content = event.content || '';
+          if (messageElement.innerHTML) {
+            messageElement.innerHTML += parseMarkdown(content);
+          } else {
+            messageElement.innerHTML = parseMarkdown(content);
+          }
+
+          if (conversationId && content) {
+            if (!conversations[conversationId].messages) {
+              conversations[conversationId].messages = [];
+            }
+            const lastMessage = conversations[conversationId].messages[conversations[conversationId].messages.length - 1];
+            if (lastMessage && lastMessage.role === 'bot') {
+              lastMessage.content = messageElement.innerHTML;
+            } else {
+              conversations[conversationId].messages.push({
+                content: messageElement.innerHTML,
+                role: 'bot'
+              });
+            }
+            saveConversationsToStorage();
+          }
+          break;
+      }
+
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
     // Chat input functionality
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
@@ -329,7 +375,7 @@
       this.style.height = Math.min(this.scrollHeight, 200) + 'px';
     });
 
-    // 修改后的 handleKeyDown 函数，按回车发送消息
+    // Handle key down for sending message
     function handleKeyDown(event) {
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
@@ -339,7 +385,7 @@
       }
     }
 
-    // 发送消息的函数
+    // Send message function
     async function sendMessage() {
       const message = userInput.value.trim();
       if (!message) return;
@@ -433,7 +479,7 @@
       updateConversationList();
     }
 
-    // Conversation list update
+    // Update conversation list
     function updateConversationList() {
       const conversationList = document.getElementById('conversation-list');
       conversationList.innerHTML = "";
@@ -456,6 +502,7 @@
       }
     }
 
+    // Load conversation by ID
     function loadConversation(id) {
       conversationId = id;
       const conversation = conversations[conversationId];
@@ -463,7 +510,7 @@
       conversation.messages.forEach(msg => displayMessage(msg.content, msg.role));
     }
 
-    // Initial sidebar setup
+    // Initialize sidebar
     updateConversationList();
   </script>
 </body>
