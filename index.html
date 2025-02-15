@@ -17,18 +17,19 @@
     }
 
     .header {
+      background-color: #4CAF50;
+      color: white;
+      padding: 15px;
+      text-align: center;
       font-size: 24px;
       font-weight: bold;
-      color: #4CAF50;
-      padding: 15px;
-      transition: margin-left 0.3s ease;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     }
 
     .main-container {
       display: flex;
       flex: 1;
       overflow: hidden;
-      transition: margin-left 0.3s ease;
     }
 
     #sidebar {
@@ -48,19 +49,20 @@
 
     #sidebar-toggle {
       position: fixed;
-      left: 20px;
-      top: 20px;
+      left: 250px;
+      top: 80px;
       background-color: #4CAF50;
       color: white;
       border: none;
       padding: 10px;
       cursor: pointer;
-      border-radius: 5px;
+      border-radius: 0 5px 5px 0;
+      transition: left 0.3s ease;
       z-index: 1000;
     }
 
     #sidebar-toggle.hidden {
-      left: -50px;
+      left: 0;
     }
 
     #sidebar h2 {
@@ -223,8 +225,15 @@
     }
 
     @media (max-width: 900px) {
+      .main-container {
+        flex-direction: column;
+      }
+
       #sidebar {
-        display: none; /* Hide sidebar by default on mobile */
+        width: 100%;
+        height: auto;
+        box-shadow: none;
+        padding: 10px;
       }
 
       #chat-container {
@@ -233,21 +242,13 @@
       }
 
       #sidebar-toggle {
-        display: block;
-      }
-
-      #sidebar-toggle.hidden {
-        left: 0;
-      }
-
-      .header {
-        margin-left: 0; /* Ensure header stays aligned with the chat area */
+        display: none;
       }
     }
   </style>
 </head>
 <body>
-  <div class="header" id="header">
+  <div class="header">
     Seagull GPT
   </div>
 
@@ -289,13 +290,10 @@
     // Sidebar toggle functionality
     const sidebarToggle = document.getElementById('sidebar-toggle');
     const sidebar = document.getElementById('sidebar');
-    const header = document.getElementById('header');
-
+    
     sidebarToggle.addEventListener('click', () => {
       sidebar.classList.toggle('hidden');
       sidebarToggle.classList.toggle('hidden');
-      // Adjust header position based on sidebar visibility
-      header.style.marginLeft = sidebar.classList.contains('hidden') ? '0px' : '250px';
     });
 
     // Chat input functionality
@@ -346,6 +344,76 @@
         });
         saveConversationsToStorage();
       }
+    }
+
+    async function handleEvent(event) {
+      if (event === '[DONE]') {
+        console.log('Stream completed');
+        return;
+      }
+
+      const chatBox = document.getElementById('chat-box');
+      let messageElement = chatBox.lastElementChild;
+
+      switch (event.type) {
+        case 'answer':
+          if (!messageElement || !messageElement.classList.contains('bot')) {
+            messageElement = document.createElement('div');
+            messageElement.classList.add('message', 'bot');
+            chatBox.appendChild(messageElement);
+          }
+          
+          const content = event.content || '';
+          if (messageElement.textContent) {
+            messageElement.textContent += content;
+          } else {
+            messageElement.textContent = content;
+          }
+
+          if (conversationId && content) {
+            if (!conversations[conversationId].messages) {
+              conversations[conversationId].messages = [];
+            }
+            const lastMessage = conversations[conversationId].messages[conversations[conversationId].messages.length - 1];
+            if (lastMessage && lastMessage.role === 'bot') {
+              lastMessage.content = messageElement.textContent;
+            } else {
+              conversations[conversationId].messages.push({
+                content: messageElement.textContent,
+                role: 'bot'
+              });
+            }
+            saveConversationsToStorage();
+          }
+          break;
+
+        case 'function_call':
+        case 'tool_response':
+        case 'verbose':
+        case 'follow_up':
+          console.log(`Received ${event.type} event:`, event);
+          break;
+
+        default:
+          if (event.status) {
+            switch (event.status) {
+              case 'created':
+                console.log('Chat created');
+                break;
+              case 'in_progress':
+                console.log('Chat in progress');
+                break;
+              case 'completed':
+                console.log('Chat completed');
+                if (event.usage) {
+                  console.log('Usage stats:', event.usage);
+                }
+                break;
+            }
+          }
+      }
+
+      chatBox.scrollTop = chatBox.scrollHeight;
     }
 
     async function sendMessage() {
@@ -430,6 +498,22 @@
       }
     }
 
+    function startNewConversation() {
+      conversationId = null;
+      document.getElementById('chat-box').innerHTML = "";
+      displayMessage("Starting a new conversation...", "bot");
+      const tempId = Date.now().toString();
+      conversations[tempId] = { messages: [] };
+      updateConversationList();
+    }
+
+    function deleteConversation(id) {
+      delete conversations[id];
+      updateConversationList();
+      document.getElementById('chat-box').innerHTML = "";
+      displayMessage("Conversation deleted.", "bot");
+    }
+
     function updateConversationList() {
       const conversationList = document.getElementById('conversation-list');
       conversationList.innerHTML = "";
@@ -459,24 +543,7 @@
       conversation.messages.forEach(msg => displayMessage(msg.content, msg.role));
     }
 
-    function startNewConversation() {
-      conversationId = null;
-      document.getElementById('chat-box').innerHTML = "";
-      displayMessage("Starting a new conversation...", "bot");
-      const tempId = Date.now().toString();
-      conversations[tempId] = { messages: [] };
-      updateConversationList();
-    }
-
-    function deleteConversation(id) {
-      delete conversations[id];
-      updateConversationList();
-      document.getElementById('chat-box').innerHTML = "";
-      displayMessage("Conversation deleted.", "bot");
-    }
-
-    // Load conversations from storage on page load
-    loadConversationsFromStorage();
+    // 初始化侧边栏
     updateConversationList();
   </script>
 </body>
