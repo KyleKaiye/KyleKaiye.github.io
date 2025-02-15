@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+<!-- 头部样式保持不变，省略 style 部分 -->
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DeepSeek R1</title>
+  <title>Kyle DeepSeek</title>
   <style>
+    /* 保持原有样式不变 */
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       margin: 0;
@@ -120,6 +122,10 @@
       margin-top: 20px;
     }
 
+    .selected {
+      border: 2px solid #4CAF50;
+    }
+
     @media (max-width: 900px) {
       body {
         flex-direction: column;
@@ -173,42 +179,82 @@
     const accessToken = "pat_kXYxi1ypVOsPCe4yBrjGRaHEoiv8sNopJLm3H0zzG4eX4phAe1ByAgzczgBW3mim";
 
     let conversationId = null;
-    const conversations = {};
+    let conversations = {};
 
-    function displayMessage(content, sender = "user") {
+    // 从localStorage加载对话历史
+    function loadConversationsFromStorage() {
+      const saved = localStorage.getItem('conversations');
+      if (saved) {
+        conversations = JSON.parse(saved);
+      }
+      return Object.keys(conversations).length > 0;
+    }
+
+    // 保存对话历史到localStorage
+    function saveConversationsToStorage() {
+      localStorage.setItem('conversations', JSON.stringify(conversations));
+    }
+
+    function displayMessage(content, sender = "user", save = true) {
       const messageElement = document.createElement('div');
       messageElement.classList.add('message', sender);
       messageElement.textContent = content;
       document.getElementById('chat-box').appendChild(messageElement);
       document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
+
+      // 如果需要保存且有当前会话ID，则保存消息
+      if (save && conversationId) {
+        if (!conversations[conversationId].messages) {
+          conversations[conversationId].messages = [];
+        }
+        conversations[conversationId].messages.push({
+          content: content,
+          role: sender
+        });
+        saveConversationsToStorage();
+      }
     }
 
     async function handleEvent(event) {
-      // 如果事件是字符串 "[DONE]"，直接返回
       if (event === '[DONE]') {
         console.log('Stream completed');
         return;
       }
 
-      // 获取消息容器
       const chatBox = document.getElementById('chat-box');
       let messageElement = chatBox.lastElementChild;
 
       switch (event.type) {
         case 'answer':
-          // 如果是第一条消息，创建新的消息元素
           if (!messageElement || !messageElement.classList.contains('bot')) {
             messageElement = document.createElement('div');
             messageElement.classList.add('message', 'bot');
             chatBox.appendChild(messageElement);
           }
           
-          // 追加内容
           const content = event.content || '';
           if (messageElement.textContent) {
             messageElement.textContent += content;
           } else {
             messageElement.textContent = content;
+          }
+
+          // 保存bot的回复
+          if (conversationId && content) {
+            if (!conversations[conversationId].messages) {
+              conversations[conversationId].messages = [];
+            }
+            // 更新或添加最后一条bot消息
+            const lastMessage = conversations[conversationId].messages[conversations[conversationId].messages.length - 1];
+            if (lastMessage && lastMessage.role === 'bot') {
+              lastMessage.content = messageElement.textContent;
+            } else {
+              conversations[conversationId].messages.push({
+                content: messageElement.textContent,
+                role: 'bot'
+              });
+            }
+            saveConversationsToStorage();
           }
           break;
 
@@ -216,12 +262,10 @@
         case 'tool_response':
         case 'verbose':
         case 'follow_up':
-          // 记录这些事件但不显示在界面上
           console.log(`Received ${event.type} event:`, event);
           break;
 
         default:
-          // 处理其他类型的事件
           if (event.status) {
             switch (event.status) {
               case 'created':
@@ -240,7 +284,6 @@
           }
       }
 
-      // 滚动到底部
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
@@ -248,7 +291,6 @@
       const message = document.getElementById('user-input').value;
       if (!message.trim()) return;
 
-      // 显示用户消息
       displayMessage(message, "user");
       document.getElementById('user-input').value = "";
 
@@ -285,7 +327,6 @@
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
           
-          // 处理完整的行，保留最后一个不完整的行
           buffer = lines.pop() || '';
           
           for (const line of lines) {
@@ -307,7 +348,6 @@
           }
         }
         
-        // 处理缓冲区中剩余的数据
         if (buffer.trim()) {
           try {
             if (buffer.startsWith('data:')) {
@@ -328,28 +368,44 @@
     }
 
     function startNewConversation() {
-      conversationId = null;
-      document.getElementById('chat-box').innerHTML = "";
-      displayMessage("Starting a new conversation...", "bot");
       const tempId = Date.now().toString();
-      conversations[tempId] = { messages: [] };
+      conversations[tempId] = { 
+        messages: [],
+        created: new Date().toLocaleString()
+      };
+      saveConversationsToStorage();
+      loadConversation(tempId);
       updateConversationList();
     }
 
     function deleteConversation(id) {
       delete conversations[id];
+      saveConversationsToStorage();
       updateConversationList();
-      document.getElementById('chat-box').innerHTML = "";
-      displayMessage("Conversation deleted.", "bot");
+      if (conversationId === id) {
+        conversationId = null;
+        document.getElementById('chat-box').innerHTML = "";
+        startNewConversation(); // 删除当前会话后自动创建新会话
+      }
     }
 
     function updateConversationList() {
       const conversationList = document.getElementById('conversation-list');
       conversationList.innerHTML = "";
-      for (let id in conversations) {
+      
+      // 按创建时间倒序排序对话
+      const sortedIds = Object.keys(conversations).sort((a, b) => {
+        return new Date(conversations[b].created) - new Date(conversations[a].created);
+      });
+
+      for (let id of sortedIds) {
         const conversationItem = document.createElement('li');
         conversationItem.classList.add('conversation-item');
-        conversationItem.textContent = `Conversation ${id}`;
+        if (id === conversationId) {
+          conversationItem.classList.add('selected');
+        }
+        const created = conversations[id].created;
+        conversationItem.textContent = `Chat ${new Date(created).toLocaleString()}`;
         conversationItem.onclick = () => loadConversation(id);
 
         const deleteButton = document.createElement('button');
@@ -367,13 +423,40 @@
 
     function loadConversation(id) {
       conversationId = id;
-      const conversation = conversations[conversationId];
       document.getElementById('chat-box').innerHTML = "";
-      conversation.messages.forEach(msg => displayMessage(msg.content, msg.role));
+      
+      // 更新选中状态
+      document.querySelectorAll('.conversation-item').forEach(item => {
+        item.classList.remove('selected');
+        if (item.textContent.includes(conversations[id].created)) {
+          item.classList.add('selected');
+        }
+      });
+
+      // 加载对话消息
+      if (conversations[id].messages) {
+        conversations[id].messages.forEach(msg => {
+          displayMessage(msg.content, msg.role, false);
+        });
+      }
     }
 
-    // 初始化侧边栏
-    updateConversationList();
+    // 页面加载时初始化
+    window.onload = function() {
+      const hasExistingConversations = loadConversationsFromStorage();
+      updateConversationList();
+      
+      if (!hasExistingConversations) {
+        // 如果没有现有对话，创建新对话
+        startNewConversation();
+      } else {
+        // 如果有现有对话，加载最新的一个
+        const latestId = Object.keys(conversations).sort((a, b) => {
+          return new Date(conversations[b].created) - new Date(conversations[a].created);
+        })[0];
+        loadConversation(latestId);
+      }
+    };
   </script>
 </body>
 </html>
