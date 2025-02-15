@@ -251,8 +251,205 @@
     let conversationId = null;
     let conversations = {};
 
-    // Rest of the original JavaScript code remains unchanged...
-    // [Previous JavaScript code continues here...]
+    function displayMessage(content, sender = "user") {
+      const messageElement = document.createElement('div');
+      messageElement.classList.add('message', sender);
+      messageElement.textContent = content;
+      document.getElementById('chat-box').appendChild(messageElement);
+      document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
+    }
+
+    async function handleEvent(event) {
+      // 如果事件是字符串 "[DONE]"，直接返回
+      if (event === '[DONE]') {
+        console.log('Stream completed');
+        return;
+      }
+
+      // 获取消息容器
+      const chatBox = document.getElementById('chat-box');
+      let messageElement = chatBox.lastElementChild;
+
+      switch (event.type) {
+        case 'answer':
+          // 如果是第一条消息，创建新的消息元素
+          if (!messageElement || !messageElement.classList.contains('bot')) {
+            messageElement = document.createElement('div');
+            messageElement.classList.add('message', 'bot');
+            chatBox.appendChild(messageElement);
+          }
+          
+          // 追加内容
+          const content = event.content || '';
+          if (messageElement.textContent) {
+            messageElement.textContent += content;
+          } else {
+            messageElement.textContent = content;
+          }
+          break;
+
+        case 'function_call':
+        case 'tool_response':
+        case 'verbose':
+        case 'follow_up':
+          // 记录这些事件但不显示在界面上
+          console.log(`Received ${event.type} event:`, event);
+          break;
+
+        default:
+          // 处理其他类型的事件
+          if (event.status) {
+            switch (event.status) {
+              case 'created':
+                console.log('Chat created');
+                break;
+              case 'in_progress':
+                console.log('Chat in progress');
+                break;
+              case 'completed':
+                console.log('Chat completed');
+                if (event.usage) {
+                  console.log('Usage stats:', event.usage);
+                }
+                break;
+            }
+          }
+      }
+
+      // 滚动到底部
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const message = document.getElementById('user-input').value;
+      if (!message.trim()) return;
+
+      // 显示用户消息
+      displayMessage(message, "user");
+      document.getElementById('user-input').value = "";
+
+      try {
+        const response = await fetch('https://api.coze.cn/v3/chat', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            bot_id: botId,
+            user_id: userId,
+            additional_messages: [
+              { role: "user", content: message, content_type: "text" }
+            ],
+            stream: true,
+            auto_save_history: true
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          
+          // 处理完整的行，保留最后一个不完整的行
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+            if (line.trim()) {
+              try {
+                if (line.startsWith('data:')) {
+                  const eventData = line.slice(5).trim();
+                  if (eventData === '[DONE]') {
+                    console.log('Stream finished');
+                    continue;
+                  }
+                  const parsedEvent = JSON.parse(eventData);
+                  await handleEvent(parsedEvent);
+                }
+              } catch (e) {
+                console.error("Error parsing event data:", e, line);
+              }
+            }
+          }
+        }
+        
+        // 处理缓冲区中剩余的数据
+        if (buffer.trim()) {
+          try {
+            if (buffer.startsWith('data:')) {
+              const eventData = buffer.slice(5).trim();
+              if (eventData !== '[DONE]') {
+                const parsedEvent = JSON.parse(eventData);
+                await handleEvent(parsedEvent);
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing final event data:", e, buffer);
+          }
+        }
+      } catch (error) {
+        console.error("Error during streaming:", error);
+        displayMessage(`Error: ${error.message}`, "bot");
+      }
+    }
+
+    function startNewConversation() {
+      conversationId = null;
+      document.getElementById('chat-box').innerHTML = "";
+      displayMessage("Starting a new conversation...", "bot");
+      const tempId = Date.now().toString();
+      conversations[tempId] = { messages: [] };
+      updateConversationList();
+    }
+
+    function deleteConversation(id) {
+      delete conversations[id];
+      updateConversationList();
+      document.getElementById('chat-box').innerHTML = "";
+      displayMessage("Conversation deleted.", "bot");
+    }
+
+    function updateConversationList() {
+      const conversationList = document.getElementById('conversation-list');
+      conversationList.innerHTML = "";
+      for (let id in conversations) {
+        const conversationItem = document.createElement('li');
+        conversationItem.classList.add('conversation-item');
+        conversationItem.textContent = `Conversation ${id}`;
+        conversationItem.onclick = () => loadConversation(id);
+
+        const deleteButton = document.createElement('button');
+        deleteButton.classList.add('delete-btn');
+        deleteButton.textContent = 'Delete';
+        deleteButton.onclick = (e) => {
+          e.stopPropagation();
+          deleteConversation(id);
+        };
+
+        conversationItem.appendChild(deleteButton);
+        conversationList.appendChild(conversationItem);
+      }
+    }
+
+    function loadConversation(id) {
+      conversationId = id;
+      const conversation = conversations[conversationId];
+      document.getElementById('chat-box').innerHTML = "";
+      conversation.messages.forEach(msg => displayMessage(msg.content, msg.role));
+    }
+
+    // 初始化侧边栏
+    updateConversationList();
   </script>
 </body>
 </html>
