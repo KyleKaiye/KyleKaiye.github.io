@@ -319,53 +319,27 @@
       }
     }
 
-    // Function to handle the event data from the API response
-    async function handleEvent(event) {
-      if (event === '[DONE]') {
-        console.log('Stream completed');
-        return;
+    // Chat input functionality
+    const userInput = document.getElementById('user-input');
+    const sendButton = document.getElementById('send-button');
+
+    userInput.addEventListener('input', function() {
+      sendButton.disabled = !this.value.trim();  
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+    });
+
+    // 修改后的 handleKeyDown 函数，按回车发送消息
+    function handleKeyDown(event) {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        if (!sendButton.disabled) {
+          sendMessage();
+        }
       }
-
-      const chatBox = document.getElementById('chat-box');
-      let messageElement = chatBox.lastElementChild;
-
-      switch (event.type) {
-        case 'answer':
-          if (!messageElement || !messageElement.classList.contains('bot')) {
-            messageElement = document.createElement('div');
-            messageElement.classList.add('message', 'bot');
-            chatBox.appendChild(messageElement);
-          }
-          
-          const content = event.content || '';
-          if (messageElement.innerHTML) {
-            messageElement.innerHTML += parseMarkdown(content);
-          } else {
-            messageElement.innerHTML = parseMarkdown(content);
-          }
-
-          if (conversationId && content) {
-            if (!conversations[conversationId].messages) {
-              conversations[conversationId].messages = [];
-            }
-            const lastMessage = conversations[conversationId].messages[conversations[conversationId].messages.length - 1];
-            if (lastMessage && lastMessage.role === 'bot') {
-              lastMessage.content = messageElement.innerHTML;
-            } else {
-              conversations[conversationId].messages.push({
-                content: messageElement.innerHTML,
-                role: 'bot'
-              });
-            }
-            saveConversationsToStorage();
-          }
-          break;
-      }
-
-      chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    // Send message function
+    // 发送消息的函数
     async function sendMessage() {
       const message = userInput.value.trim();
       if (!message) return;
