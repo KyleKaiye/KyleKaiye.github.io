@@ -138,6 +138,7 @@
       background-color: #fff9c4;
       display: inline-block;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      white-space: pre-wrap; /* Enable line breaks */
     }
 
     .user {
@@ -288,54 +289,21 @@
     let conversationId = null;
     let conversations = {};
 
-    // Sidebar toggle functionality
-    const sidebarToggle = document.getElementById('sidebar-toggle');
-    const sidebar = document.getElementById('sidebar');
-    
-    sidebarToggle.addEventListener('click', () => {
-      sidebar.classList.toggle('hidden');
-      sidebarToggle.classList.toggle('hidden');
-    });
-
-    if (window.innerWidth <= 900) {
-      sidebar.classList.add('hidden');
+    // Function to parse and display markdown and line breaks
+    function parseMarkdown(content) {
+      // Convert markdown syntax to HTML
+      let parsedContent = content
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // bold
+        .replace(/\*(.*?)\*/g, '<em>$1</em>') // italics
+        .replace(/\n/g, '<br>'); // line breaks
+      return parsedContent;
     }
 
-    // Chat input functionality
-    const userInput = document.getElementById('user-input');
-    const sendButton = document.getElementById('send-button');
-
-    userInput.addEventListener('input', function() {
-      sendButton.disabled = !this.value.trim();  
-      this.style.height = 'auto';
-      this.style.height = Math.min(this.scrollHeight, 200) + 'px';
-    });
-
-    function handleKeyDown(event) {
-      if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
-        if (!sendButton.disabled) {
-          sendMessage();
-        }
-      }
-    }
-
-    function loadConversationsFromStorage() {
-      const saved = localStorage.getItem('conversations');
-      if (saved) {
-        conversations = JSON.parse(saved);
-      }
-      return Object.keys(conversations).length > 0;
-    }
-
-    function saveConversationsToStorage() {
-      localStorage.setItem('conversations', JSON.stringify(conversations));
-    }
-
+    // Display message with markdown interpretation
     function displayMessage(content, sender = "user", save = true) {
       const messageElement = document.createElement('div');
       messageElement.classList.add('message', sender);
-      messageElement.textContent = content;
+      messageElement.innerHTML = parseMarkdown(content); // Use innerHTML to render parsed content
       document.getElementById('chat-box').appendChild(messageElement);
       document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
 
@@ -351,6 +319,7 @@
       }
     }
 
+    // Function to handle the event data from the API response
     async function handleEvent(event) {
       if (event === '[DONE]') {
         console.log('Stream completed');
@@ -369,10 +338,10 @@
           }
           
           const content = event.content || '';
-          if (messageElement.textContent) {
-            messageElement.textContent += content;
+          if (messageElement.innerHTML) {
+            messageElement.innerHTML += parseMarkdown(content);
           } else {
-            messageElement.textContent = content;
+            messageElement.innerHTML = parseMarkdown(content);
           }
 
           if (conversationId && content) {
@@ -381,10 +350,10 @@
             }
             const lastMessage = conversations[conversationId].messages[conversations[conversationId].messages.length - 1];
             if (lastMessage && lastMessage.role === 'bot') {
-              lastMessage.content = messageElement.textContent;
+              lastMessage.content = messageElement.innerHTML;
             } else {
               conversations[conversationId].messages.push({
-                content: messageElement.textContent,
+                content: messageElement.innerHTML,
                 role: 'bot'
               });
             }
@@ -396,6 +365,7 @@
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
+    // Send message function
     async function sendMessage() {
       const message = userInput.value.trim();
       if (!message) return;
@@ -478,6 +448,7 @@
       }
     }
 
+    // Start new conversation
     function startNewConversation() {
       conversationId = null;
       document.getElementById('chat-box').innerHTML = "";
@@ -488,13 +459,7 @@
       updateConversationList();
     }
 
-    function deleteConversation(id) {
-      delete conversations[id];
-      updateConversationList();
-      document.getElementById('chat-box').innerHTML = "";
-      displayMessage("Conversation deleted.", "bot");
-    }
-
+    // Conversation list update
     function updateConversationList() {
       const conversationList = document.getElementById('conversation-list');
       conversationList.innerHTML = "";
@@ -524,7 +489,7 @@
       conversation.messages.forEach(msg => displayMessage(msg.content, msg.role));
     }
 
-    // 初始化侧边栏
+    // Initial sidebar setup
     updateConversationList();
   </script>
 </body>
