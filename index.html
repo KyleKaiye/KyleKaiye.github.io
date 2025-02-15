@@ -30,6 +30,7 @@
       display: flex;
       flex: 1;
       overflow: hidden;
+      transition: margin-left 0.3s ease;
     }
 
     #sidebar {
@@ -544,6 +545,7 @@
     }
 
     // 初始化侧边栏
+    loadConversationsFromStorage();
     updateConversationList();
   </script>
 </body>
